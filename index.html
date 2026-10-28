@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#06101f">
+  <title>鲸鱼娘变化器</title>
+
+  <!-- PWA：可添加到主屏幕 / 全屏独立运行 -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="鲸鱼娘">
+  <meta name="application-name" content="鲸鱼娘变化器">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <main class="stage">
+    <header class="masthead">
+      <p class="eyebrow">WHALE‑GIRL RHEOSTAT</p>
+      <h1 class="title" id="title">鲸鱼娘变化器</h1>
+      <p class="subtitle" id="subtitle">拖动滑片，调节今天的鲸系浓度</p>
+    </header>
+
+    <section class="display" aria-label="鲸鱼娘形象">
+      <div class="frame-stack" id="frameStack">
+        <p class="empty-hint" id="emptyHint">
+          把 5 张图片放进 <code>assets/</code>，命名为<br>
+          <code>a.jpeg · c.jpeg · d.jpeg · g.jpeg · h.jpeg</code>
+        </p>
+      </div>
+      <div class="display-glow" aria-hidden="true"></div>
+    </section>
+
+    <div class="caption" aria-live="polite">
+      <div class="caption-line">
+        <span class="caption-level" id="captionLevel">Lv.3</span>
+        <h2 class="caption-name" id="captionName">鲸灵</h2>
+      </div>
+      <p class="caption-desc" id="captionDesc">海水开始绕着指尖打转。</p>
+    </div>
+
+    <section class="rheostat" aria-label="鲸系浓度调节器">
+      <div class="meter">
+        <span class="meter-value" id="meterValue">50</span>
+        <span class="meter-unit">%</span>
+        <span class="meter-label">鲸度</span>
+      </div>
+
+      <div class="rail-wrap">
+        <div class="track" id="track">
+          <div class="track-coil" aria-hidden="true"></div>
+          <div class="track-fill" id="trackFill" aria-hidden="true"></div>
+          <div class="track-glow" id="trackGlow" aria-hidden="true"></div>
+          <div class="slider" id="slider" role="slider" tabindex="0"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
+               aria-valuetext="Lv.3 鲸灵" aria-label="鲸系浓度">
+            <span class="slider-grooves" aria-hidden="true"></span>
+            <span class="slider-emoji" aria-hidden="true">🐋</span>
+            <span class="slider-cap" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="ticks" id="ticks" aria-hidden="true"></div>
+      </div>
+
+      <div class="grade-labels" id="gradeLabels" aria-hidden="true"></div>
+    </section>
+
+    <footer class="controls">
+      <button class="ghost-btn" id="soundToggle" type="button" aria-pressed="true">
+        <span id="soundIcon">🔊</span><span id="soundText">音效开</span>
+      </button>
+      <button class="ghost-btn" id="settingsToggle" type="button">
+        <span>⚙</span><span>设置</span>
+      </button>
+    </footer>
+  </main>
+
+  <aside class="settings" id="settings" aria-hidden="true" aria-label="设置面板">
+    <div class="settings-head">
+      <h2>设置</h2>
+      <button class="icon-btn" id="settingsClose" type="button" aria-label="关闭设置">✕</button>
+    </div>
+
+    <div class="settings-body">
+      <label class="field">
+        <span>标题</span>
+        <input type="text" id="inputTitle" maxlength="24">
+      </label>
+
+      <label class="field">
+        <span>副标题</span>
+        <input type="text" id="inputSubtitle" maxlength="40">
+      </label>
+
+      <fieldset class="fieldset">
+        <legend>档位名称与文案</legend>
+        <div id="gradeFields" class="grade-fields"></div>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>主题色</legend>
+        <div class="swatches" id="swatches"></div>
+        <label class="field inline">
+          <span>自定义</span>
+          <input type="color" id="inputAccent" value="#4fc3f7">
+        </label>
+      </fieldset>
+
+      <button class="btn-ghost" id="resetBtn" type="button">恢复默认</button>
+    </div>
+  </aside>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
