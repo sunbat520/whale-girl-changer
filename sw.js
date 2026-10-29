@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v1';
+const CACHE_NAME = 'whale-changer-v2';
 
 const PRECACHE = [
   './',
