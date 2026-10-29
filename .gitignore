@@ -1,3 +1,9 @@
 .DS_Store
 *.log
 node_modules/
+
+# 图片对齐用的虚拟环境与临时校验图（脚本本身要提交）
+.venv-img/
+__pycache__/
+tools/__pycache__/
+tools/*.png

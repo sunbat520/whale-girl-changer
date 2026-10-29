@@ -12,13 +12,13 @@
 
   const STORAGE_KEY = 'whale-changer:v1';
 
-  // 图片按档位顺序排列。想换图或改顺序，直接改这里。
+  // 图片按档位顺序排列。已对齐：脚底和头顶统一到同高度，仅 cup 不同。
   const FRAME_SOURCES = [
-    'assets/a.jpeg',
-    'assets/c.jpeg',
-    'assets/d.jpeg',
-    'assets/g.jpeg',
-    'assets/h.jpeg',
+    'assets/aligned/a.jpeg',
+    'assets/aligned/c.jpeg',
+    'assets/aligned/d.jpeg',
+    'assets/aligned/g.jpeg',
+    'assets/aligned/h.jpeg',
   ];
 
   const DEFAULT_GRADES = [

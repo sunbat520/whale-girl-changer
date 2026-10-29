@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v2';
+const CACHE_NAME = 'whale-changer-v4';
 
 const PRECACHE = [
   './',
@@ -16,11 +16,11 @@ const PRECACHE = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
-  './assets/a.jpeg',
-  './assets/c.jpeg',
-  './assets/d.jpeg',
-  './assets/g.jpeg',
-  './assets/h.jpeg',
+  './assets/aligned/a.jpeg',
+  './assets/aligned/c.jpeg',
+  './assets/aligned/d.jpeg',
+  './assets/aligned/g.jpeg',
+  './assets/aligned/h.jpeg',
 ];
 
 self.addEventListener('install', (event) => {

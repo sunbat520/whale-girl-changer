@@ -14,17 +14,19 @@
 
 ## 换图片
 
-默认读取 `assets/` 下的 5 张图，按档位顺序：
+默认读取 `assets/aligned/` 下已对齐的 5 张图（脚底和头顶统一到同高度，仅 cup 不同），按档位顺序：
 
 | 档位 | 文件 |
 | --- | --- |
-| Lv.1 小鲸鱼 | `assets/a.jpeg` |
-| Lv.2 鲸鱼娘 | `assets/c.jpeg` |
-| Lv.3 鲸灵 | `assets/d.jpeg` |
-| Lv.4 鲸圣 | `assets/g.jpeg` |
-| Lv.5 鲸祖 | `assets/h.jpeg` |
+| Lv.1 小鲸鱼 | `assets/aligned/a.jpeg` |
+| Lv.2 鲸鱼娘 | `assets/aligned/c.jpeg` |
+| Lv.3 鲸灵 | `assets/aligned/d.jpeg` |
+| Lv.4 鲸圣 | `assets/aligned/g.jpeg` |
+| Lv.5 鲸祖 | `assets/aligned/h.jpeg` |
 
-想换图或改顺序，直接替换文件，或修改 `app.js` 顶部的 `FRAME_SOURCES` 数组。图片建议用同尺寸、同背景的立绘，交叉过渡会更自然。
+对齐脚本在 `tools/align_v11.py`，可重新运行调整参数。想换图或改顺序，直接替换文件，或修改 `app.js` 顶部的 `FRAME_SOURCES` 数组。图片建议用同尺寸、同背景的立绘，交叉过渡会更自然。
+
+`assets/` 下的原始未对齐图片保留备查。
 
 ## 本地运行
 
