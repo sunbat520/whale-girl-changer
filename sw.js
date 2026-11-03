@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v4';
+const CACHE_NAME = 'whale-changer-v5';
 
 const PRECACHE = [
   './',
@@ -21,6 +21,12 @@ const PRECACHE = [
   './assets/aligned/d.jpeg',
   './assets/aligned/g.jpeg',
   './assets/aligned/h.jpeg',
+  './assets/v2/b.jpeg',
+  './assets/v2/c.jpeg',
+  './assets/v2/d.jpeg',
+  './assets/v2/e.jpeg',
+  './assets/v2/f.jpeg',
+  './assets/v2/g.jpeg',
 ];
 
 self.addEventListener('install', (event) => {

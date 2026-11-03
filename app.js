@@ -12,16 +12,8 @@
 
   const STORAGE_KEY = 'whale-changer:v1';
 
-  // 图片按档位顺序排列。已对齐：脚底和头顶统一到同高度，仅 cup 不同。
-  const FRAME_SOURCES = [
-    'assets/aligned/a.jpeg',
-    'assets/aligned/c.jpeg',
-    'assets/aligned/d.jpeg',
-    'assets/aligned/g.jpeg',
-    'assets/aligned/h.jpeg',
-  ];
-
-  const DEFAULT_GRADES = [
+  // 经典 5 档：已对齐的三视图立绘，脚底和头顶统一，仅 cup 不同。
+  const CLASSIC_GRADES = [
     { name: '小鲸鱼', desc: '刚学会吐泡泡，连尾巴都还是软的。' },
     { name: '鲸鱼娘', desc: '今天的女仆装熨得很平整。' },
     { name: '鲸灵', desc: '海水开始绕着指尖打转。' },
@@ -29,12 +21,53 @@
     { name: '鲸祖', desc: '鲸祖降临，潮汐为她让路。' },
   ];
 
+  // v2 六档：同一张立绘挤压出的 B–G（来自 whale-girl-changer-v2）。
+  const V2_GRADES = [
+    { name: 'B 微澜', desc: '风平浪静，只漾开一圈小小的涟漪。' },
+    { name: 'C 轻潮', desc: '潮水轻轻漫过裙摆。' },
+    { name: 'D 浪涌', desc: '海面开始起伏，呼吸也深了一寸。' },
+    { name: 'E 深海', desc: '深海的压强，从胸口缓缓传上来。' },
+    { name: 'F 鲸涛', desc: '整片海都跟着她一起涨落。' },
+    { name: 'G 鲸祖', desc: '鲸祖降临，潮汐为她让路。' },
+  ];
+
+  // 图片包：每包自带帧顺序与档位文案，切换时帧数/刻度/文案一起适配。
+  const PACKS = {
+    classic: {
+      label: '经典 5 档（a/c/d/g/h）',
+      dir: 'assets/aligned/',
+      sources: [
+        'assets/aligned/a.jpeg',
+        'assets/aligned/c.jpeg',
+        'assets/aligned/d.jpeg',
+        'assets/aligned/g.jpeg',
+        'assets/aligned/h.jpeg',
+      ],
+      grades: CLASSIC_GRADES,
+    },
+    v2: {
+      label: '鲸鱼娘 v2 六档（B–G）',
+      dir: 'assets/v2/',
+      sources: [
+        'assets/v2/b.jpeg',
+        'assets/v2/c.jpeg',
+        'assets/v2/d.jpeg',
+        'assets/v2/e.jpeg',
+        'assets/v2/f.jpeg',
+        'assets/v2/g.jpeg',
+      ],
+      grades: V2_GRADES,
+    },
+  };
+  const PACK_IDS = Object.keys(PACKS);
+  const DEFAULT_PACK = 'classic';
+
   const DEFAULTS = {
     title: '鲸鱼娘变化器',
     subtitle: '拖动滑片，调节今天的鲸系浓度',
     accent: '#4fc3f7',
     sound: true,
-    grades: DEFAULT_GRADES,
+    pack: DEFAULT_PACK,
   };
 
   const PRESET_COLORS = [
@@ -46,7 +79,6 @@
     '#34d399', // 海藻绿
   ];
 
-  const N = FRAME_SOURCES.length;
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
   /* ------------------------------------------------------------
@@ -79,6 +111,7 @@
     scrim: $('scrim'),
     inputTitle: $('inputTitle'),
     inputSubtitle: $('inputSubtitle'),
+    inputPack: $('inputPack'),
     gradeFields: $('gradeFields'),
     swatches: $('swatches'),
     inputAccent: $('inputAccent'),
@@ -107,14 +140,27 @@
      配置读写
      ------------------------------------------------------------ */
 
-  function loadConfig() {
-    const base = {
+  function makeDefaultGradesByPack() {
+    const map = {};
+    PACK_IDS.forEach((id) => {
+      map[id] = PACKS[id].grades.map((g) => ({ ...g }));
+    });
+    return map;
+  }
+
+  function defaultConfig() {
+    return {
       title: DEFAULTS.title,
       subtitle: DEFAULTS.subtitle,
       accent: DEFAULTS.accent,
       sound: DEFAULTS.sound,
-      grades: DEFAULTS.grades.map((g) => ({ ...g })),
+      pack: DEFAULTS.pack,
+      gradesByPack: makeDefaultGradesByPack(),
     };
+  }
+
+  function loadConfig() {
+    const base = defaultConfig();
 
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -128,19 +174,40 @@
         base.accent = saved.accent;
       }
       if (typeof saved.sound === 'boolean') base.sound = saved.sound;
+      if (typeof saved.pack === 'string' && PACKS[saved.pack]) base.pack = saved.pack;
 
-      if (Array.isArray(saved.grades)) {
-        saved.grades.forEach((g, i) => {
-          if (!base.grades[i] || !g) return;
-          if (typeof g.name === 'string' && g.name.trim()) base.grades[i].name = g.name;
-          if (typeof g.desc === 'string') base.grades[i].desc = g.desc;
+      const applyGrades = (packId, list) => {
+        if (!Array.isArray(list)) return;
+        const grades = base.gradesByPack[packId];
+        if (!grades) return;
+        list.forEach((g, i) => {
+          if (!grades[i] || !g) return;
+          if (typeof g.name === 'string' && g.name.trim()) grades[i].name = g.name;
+          if (typeof g.desc === 'string') grades[i].desc = g.desc;
         });
+      };
+
+      if (saved.gradesByPack && typeof saved.gradesByPack === 'object') {
+        PACK_IDS.forEach((id) => applyGrades(id, saved.gradesByPack[id]));
       }
+      // 旧版配置只有 5 条 grades，迁移为经典包文案
+      if (Array.isArray(saved.grades)) applyGrades('classic', saved.grades);
     } catch (err) {
       // localStorage 不可用时按默认配置运行
     }
 
     return base;
+  }
+
+  function activePack() {
+    return PACKS[config.pack] || PACKS[DEFAULT_PACK];
+  }
+
+  function activeGrades() {
+    const id = PACKS[config.pack] ? config.pack : DEFAULT_PACK;
+    const grades = config.gradesByPack && config.gradesByPack[id];
+    if (Array.isArray(grades) && grades.length) return grades;
+    return PACKS[id].grades;
   }
 
   function saveConfig() {
@@ -256,21 +323,40 @@
 
   function buildGradeLabels() {
     els.gradeLabels.innerHTML = '';
-    config.grades.forEach((grade, i) => {
+    const grades = activeGrades();
+    const n = grades.length;
+    grades.forEach((grade, i) => {
       const label = document.createElement('span');
       label.className = 'grade-label';
       if (i === 0) label.classList.add('is-first');
-      if (i === N - 1) label.classList.add('is-last');
-      label.style.left = (i / (N - 1)) * 100 + '%';
+      if (i === n - 1) label.classList.add('is-last');
+      label.style.left = (i / (n - 1)) * 100 + '%';
       label.textContent = grade.name;
       els.gradeLabels.appendChild(label);
     });
   }
 
+  function updateEmptyHint() {
+    const pack = activePack();
+    const names = pack.sources
+      .map((src) => src.slice(src.lastIndexOf('/') + 1))
+      .join(' · ');
+    els.emptyHint.innerHTML =
+      '把 ' + pack.sources.length + ' 张图片放进 <code>' + pack.dir + '</code>，命名为<br>' +
+      '<code>' + names + '</code>';
+  }
+
   function buildFrames() {
+    // 只移除旧帧，保留空图提示节点
+    Array.prototype.forEach.call(els.frameStack.querySelectorAll('img'), (img) => img.remove());
+    frames.length = 0;
+
+    updateEmptyHint();
+
+    const sources = activePack().sources;
     let settled = 0;
 
-    FRAME_SOURCES.forEach((src) => {
+    sources.forEach((src) => {
       const img = document.createElement('img');
       img.src = src;
       img.alt = '';
@@ -280,10 +366,13 @@
       img.style.visibility = 'hidden';
 
       const settle = () => {
+        if (!frames.includes(img)) return; // 旧包的迟到事件忽略
         settled += 1;
-        if (settled < N) return;
+        if (settled < sources.length) return;
         const anyLoaded = frames.some((f) => f.naturalWidth > 0);
         els.emptyHint.style.display = anyLoaded ? 'none' : 'block';
+        // 切换图片包时首帧可能在 render 之前完成加载，补一次渲染避免空白
+        render(current, false);
       };
 
       img.addEventListener('load', settle, { once: true });
@@ -310,13 +399,15 @@
      渲染
      ------------------------------------------------------------ */
 
-  function render(t) {
-    const pos = t * (N - 1);
+  function render(t, animate = true) {
+    const n = frames.length || activePack().sources.length || 1;
+    const pos = t * (n - 1);
     const pct = t * 100;
 
-    for (let i = 0; i < N; i++) {
-      const weight = Math.max(0, 1 - Math.abs(pos - i));
+    for (let i = 0; i < n; i++) {
       const img = frames[i];
+      if (!img) continue;
+      const weight = Math.max(0, 1 - Math.abs(pos - i));
       img.style.opacity = weight.toFixed(3);
       img.style.visibility = weight > 0.002 ? 'visible' : 'hidden';
     }
@@ -334,12 +425,13 @@
     const idx = Math.round(pos);
     if (idx !== lastIdx) {
       lastIdx = idx;
-      updateGrade(idx, true);
+      updateGrade(idx, animate);
     }
   }
 
   function updateGrade(idx, animate) {
-    const grade = config.grades[idx] || config.grades[0];
+    const grades = activeGrades();
+    const grade = grades[idx] || grades[0];
     if (!grade) return;
 
     els.captionLevel.textContent = 'Lv.' + (idx + 1);
@@ -540,9 +632,10 @@
     els.inputTitle.value = config.title;
     els.inputSubtitle.value = config.subtitle;
     els.inputAccent.value = config.accent;
+    els.inputPack.value = config.pack;
 
     els.gradeFields.innerHTML = '';
-    config.grades.forEach((grade, i) => {
+    activeGrades().forEach((grade, i) => {
       const wrap = document.createElement('div');
       wrap.className = 'grade-field';
       wrap.innerHTML =
@@ -555,6 +648,25 @@
     });
 
     syncSwatchActive();
+  }
+
+  function switchPack(pack) {
+    if (!PACKS[pack]) {
+      els.inputPack.value = config.pack;
+      return;
+    }
+    if (pack === config.pack) return;
+
+    config.pack = pack;
+    lastIdx = -1;
+    current = 0.5;
+    target = 0.5;
+
+    buildFrames();
+    buildGradeLabels();
+    render(current, false);
+    syncSettingsInputs();
+    saveConfig();
   }
 
   /* ------------------------------------------------------------
@@ -605,6 +717,10 @@
       saveConfig();
     });
 
+    els.inputPack.addEventListener('change', () => {
+      switchPack(els.inputPack.value);
+    });
+
     els.swatches.addEventListener('click', (e) => {
       const btn = e.target.closest('.swatch');
       if (!btn) return;
@@ -618,28 +734,26 @@
       if (!input) return;
       const i = Number(input.dataset.index);
       const field = input.dataset.field;
-      if (!config.grades[i]) return;
+      const grades = activeGrades();
+      if (!grades[i]) return;
 
       if (field === 'name') {
-        config.grades[i].name = input.value.trim() || DEFAULT_GRADES[i].name;
+        grades[i].name = input.value.trim() || PACKS[config.pack].grades[i].name;
       } else if (field === 'desc') {
-        config.grades[i].desc = input.value;
+        grades[i].desc = input.value;
       }
       applyConfig();
       saveConfig();
     });
 
     els.resetBtn.addEventListener('click', () => {
-      config = {
-        title: DEFAULTS.title,
-        subtitle: DEFAULTS.subtitle,
-        accent: DEFAULTS.accent,
-        sound: DEFAULTS.sound,
-        grades: DEFAULT_GRADES.map((g) => ({ ...g })),
-      };
+      config = defaultConfig();
       sound.setEnabled(config.sound);
+      lastIdx = -1;
+      current = 0.5;
       target = 0.5;
-      kick();
+      buildFrames();
+      render(current, false);
       syncSettingsInputs();
       syncSoundButton();
       applyConfig();
@@ -679,12 +793,13 @@
     buildSwatches();
     buildGradeLabels();
     syncSoundButton();
+    els.inputPack.value = config.pack;
 
     document.documentElement.style.setProperty('--accent', config.accent);
     els.title.textContent = config.title;
     els.subtitle.textContent = config.subtitle;
 
-    render(current);
+    render(current, false);
     bindEvents();
     registerServiceWorker();
 
