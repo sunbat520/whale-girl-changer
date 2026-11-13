@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""把三套动作素材统一生成 sprite 图集，并输出前端消费的 assets/burst/sets.js。
+"""把动作素材生成 sprite 图集，把人物造型图做成人物卡，并输出前端消费的 assets/burst/sets.js。
 
 素材来源（只读）：
 
-  A. 蓝发鲸鱼女仆_全部图片与GIF_分类合集/03_五组动作/<组>/<组>_动画.gif
-     8 帧，443×443，自带 alpha                       → family v443「精细版」
-  B. 蓝发鲸鱼女仆_全部素材分类合集/02_可播放GIF动画/<组>/<文件>.gif
-     16 帧，约 315×311，不透明纯色底                  → family v315「简版」（需抠底）
-  C. 蓝发鲸鱼女仆 · 图片与 GIF 完整合集/02_初版角色_反弹摔倒/GIF动画/蓝发鲸娘女仆撞玻璃反弹记.gif
-     9 帧，138×138，自带 alpha                       → family impact「九宫格」
-     注：九宫格是同一张立绘的 3×3 切块，按序播放是镜头往下扫，不是真动作。
+  动作 A. 蓝发鲸鱼女仆_全部图片与GIF_分类合集/03_五组动作/<组>/<组>_动画.gif
+          8 帧，443×443，自带 alpha
+  人物卡 B. 蓝发鲸鱼女仆_全部图片与GIF_分类合集/01_人物原图与造型修改/*.png
+          944×1665，白底无 alpha，逐张四角泛滥填充抠底后缩到 720 宽
+          注：同目录的 640.png 是 492×867 低清版且带水印，不用。
 
 产物：
-  assets/burst/<id>.webp   每组一张图集（4×2 / 4×4 / 3×3）
-  assets/burst/sets.js     window.BURST_SETS = [...]，app.js 直接消费
+  assets/burst/<id>.webp   每组动作一张图集（4×2）
+  assets/burst/card-N.webp 三张人物卡
+  assets/burst/sets.js     window.BURST_SETS / window.BURST_CARDS，app.js 直接消费
 
-展示层按「高度铺满展示区」摆放（styles.css 的 .burst-frame），所以不再按身高做缩放：
-两套画风的角色身高差约 4%，而任何 >1 的缩放都会把头发/脚裁掉。
+展示层按「高度铺满展示区」摆放（styles.css 的 .burst-frame / .rush-figure），
+所以不按身高做缩放补偿：任何 >1 的缩放都会把头发或脚裁掉。
 
-app.js 不再硬编码帧数 / 网格 / 尺寸；改素材后重跑本脚本即可。
+改素材后重跑本脚本即可，前端不用动。
 """
 
 from pathlib import Path
@@ -31,33 +30,35 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 DST = ROOT / "assets" / "burst"
 
-SRC_A = Path("/Users/yaobinsun/Downloads/jyl-pet/蓝发鲸鱼女仆_全部图片与GIF_分类合集/03_五组动作")
-SRC_B = Path("/Users/yaobinsun/Downloads/jyl-pet/蓝发鲸鱼女仆_全部素材分类合集/02_可播放GIF动画")
-SRC_C = Path(
-    "/Users/yaobinsun/Downloads/jyl-pet/蓝发鲸鱼女仆 · 图片与 GIF 完整合集"
-    "/02_初版角色_反弹摔倒/GIF动画/蓝发鲸娘女仆撞玻璃反弹记.gif"
+SRC_ACTIONS = Path(
+    "/Users/yaobinsun/Downloads/jyl-pet/蓝发鲸鱼女仆_全部图片与GIF_分类合集/03_五组动作"
+)
+SRC_CARDS = Path(
+    "/Users/yaobinsun/Downloads/jyl-pet/蓝发鲸鱼女仆_全部图片与GIF_分类合集/01_人物原图与造型修改"
 )
 
 QUALITY = 90
-COLS = 4  # 五组动作用 4 列；16 帧因此是 4×4，9 帧九宫格用 3×3
+CARD_WIDTH = 720
+COLS = 4  # 8 帧 → 4×2
 
-# (id, family, action, variant, gif 路径)
-SOURCES = [
-    ("walk-443", "v443", "walk", "精细版", SRC_A / "走路/走路_动画.gif"),
-    ("wave-443", "v443", "wave", "精细版", SRC_A / "挥手/挥手_动画.gif"),
-    ("jump-443", "v443", "jump", "精细版", SRC_A / "蹦跳/蹦跳_动画.gif"),
-    ("sit-443", "v443", "sit", "精细版", SRC_A / "坐下/坐下_动画.gif"),
-    ("fall-443", "v443", "fall", "精细版", SRC_A / "摔倒/摔倒_动画.gif"),
-    ("walk-315", "v315", "walk", "简版", SRC_B / "走路/蓝发鲸尾女仆行走动画.gif"),
-    ("wave-315", "v315", "wave", "简版", SRC_B / "挥手/蓝发鲸尾女仆挥手动画.gif"),
-    ("jump-315", "v315", "jump", "简版", SRC_B / "跳跃/蓝发鲸尾女仆跳跃动画.gif"),
-    ("sit-315", "v315", "sit", "简版", SRC_B / "坐下/蓝发鲸尾女仆优雅落座动画.gif"),
-    ("fall-315", "v315", "fall", "简版", SRC_B / "跌倒/蓝发鲸尾女仆跌倒动画.gif"),
-    ("impact-grid", "impact", "impact", "九宫格", SRC_C),
+# (输出 id, action, gif 相对路径)
+ACTIONS = [
+    ("walk", "walk", "走路/走路_动画.gif"),
+    ("wave", "wave", "挥手/挥手_动画.gif"),
+    ("jump", "jump", "蹦跳/蹦跳_动画.gif"),
+    ("sit", "sit", "坐下/坐下_动画.gif"),
+    ("fall", "fall", "摔倒/摔倒_动画.gif"),
 ]
 
-# 需要抠底的 family（GIF 底色不透明）
-CUTOUT_FAMILIES = {"v315"}
+# 人物卡：按造型由小到大排，label 只用于按钮文案
+CARDS = [
+    ("card-1", "微澜", "image(20261113-021206).png"),
+    ("card-2", "丰满", "same_scene_and_pose_a_detailed_anime_style_illus.png"),
+    ("card-3", "汹涌", "a_highly_detailed_anime_illustration_identical_cha.png"),
+]
+
+# 连招顺序 = 按钮顺序（走路 → 挥手 → 蹦跳 → 摔倒 → 坐下）
+COMBO_ORDER = ["walk", "wave", "jump", "fall", "sit"]
 
 
 def cutout(img: Image.Image) -> Image.Image:
@@ -66,7 +67,7 @@ def cutout(img: Image.Image) -> Image.Image:
     w, h = im.size
     for seed in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
         if im.getpixel(seed)[3] > 0:
-            ImageDraw.floodfill(im, seed, (0, 0, 0, 0), thresh=26)
+            ImageDraw.floodfill(im, seed, (0, 0, 0, 0), thresh=24)
     px = im.load()
     for y in range(h):
         for x in range(w):
@@ -76,91 +77,110 @@ def cutout(img: Image.Image) -> Image.Image:
     return im
 
 
-def load_frames(path: Path, cut: bool) -> list[Image.Image]:
-    gif = Image.open(path)
-    frames = []
-    for i in range(getattr(gif, "n_frames", 1)):
-        gif.seek(i)
-        frames.append(cutout(gif) if cut else gif.convert("RGBA").copy())
-    return frames
+def to_webp(img: Image.Image, out: Path) -> int:
+    with tempfile.TemporaryDirectory() as tmp:
+        png = Path(tmp) / "src.png"
+        img.save(png, optimize=True)
+        subprocess.run(
+            ["cwebp", "-quiet", "-q", str(QUALITY), "-alpha_q", "100", "-m", "6",
+             str(png), "-o", str(out)],
+            check=True,
+        )
+    return out.stat().st_size
 
 
 def main() -> int:
-    if not all(p.exists() for _, _, _, _, p in SOURCES):
-        for _, _, _, _, p in SOURCES:
-            if not p.exists():
-                print(f"素材不存在：{p}", flush=True)
-        return 1
-
     DST.mkdir(parents=True, exist_ok=True)
 
-    loaded = []
-    for set_id, family, action, variant, path in SOURCES:
-        frames = load_frames(path, cut=family in CUTOUT_FAMILIES)
-        loaded.append((set_id, family, action, variant, frames))
+    # 1. 动作图集
+    entries = [{"id": "impact-pose", "action": "impact", "variant": "姿态帧",
+                "kind": "pose", "total": 10}]
+    sheet_totals = {}
 
-    entries = [{"id": "impact-pose", "family": "impact", "action": "impact",
-                "variant": "姿态帧", "kind": "pose", "total": 10}]
+    for set_id, action, rel in ACTIONS:
+        path = SRC_ACTIONS / rel
+        if not path.exists():
+            print(f"素材不存在：{path}", flush=True)
+            return 1
 
-    for set_id, family, action, variant, frames in loaded:
+        gif = Image.open(path)
+        frames = []
+        for i in range(getattr(gif, "n_frames", 1)):
+            gif.seek(i)
+            frames.append(gif.convert("RGBA").copy())
+
         total = len(frames)
-        cols = 3 if set_id == "impact-grid" else COLS
-        rows = (total + cols - 1) // cols
-        if total != cols * rows:
-            print(f"{set_id}：{total} 帧铺不满 {cols}×{rows} 网格", flush=True)
+        rows = (total + COLS - 1) // COLS
+        if total != COLS * rows:
+            print(f"{set_id}：{total} 帧铺不满 {COLS}×{rows} 网格", flush=True)
             return 1
 
         cw, ch = frames[0].size
-        sheet = Image.new("RGBA", (cw * cols, ch * rows), (0, 0, 0, 0))
+        sheet = Image.new("RGBA", (cw * COLS, ch * rows), (0, 0, 0, 0))
         for i, frame in enumerate(frames):
-            row, col = divmod(i, cols)
+            row, col = divmod(i, COLS)
             sheet.paste(frame, (col * cw, row * ch))
 
         out = DST / f"{set_id}.webp"
-        with tempfile.TemporaryDirectory() as tmp:
-            png = Path(tmp) / "sheet.png"
-            sheet.save(png, optimize=True)
-            subprocess.run(
-                ["cwebp", "-quiet", "-q", str(QUALITY), "-alpha_q", "100", "-m", "6",
-                 str(png), "-o", str(out)],
-                check=True,
-            )
+        size = to_webp(sheet, out)
+        sheet_totals[action] = total
 
         entries.append({
             "id": set_id,
-            "family": family,
             "action": action,
-            "variant": variant,
             "kind": "sheet",
             "sheet": f"assets/burst/{set_id}.webp",
-            "cols": cols,
+            "cols": COLS,
             "rows": rows,
             "total": total,
             "ar": round(cw / ch, 4),
         })
+        print(f"{set_id:6s} {total:2d} 帧 {cw}×{ch} → {COLS}×{rows} 图集 "
+              f"{sheet.width}×{sheet.height}（{size / 1024:.0f}KB）")
 
-        print(f"{set_id:12s} {total:2d} 帧 {cw}×{ch} → {cols}×{rows} 图集 "
-              f"{sheet.width}×{sheet.height}（{out.stat().st_size / 1024:.0f}KB）")
+    # 2. 连招：五套动作按按钮顺序串成一条长序列，不跨版本混
+    combo_total = sum(sheet_totals.get(a, 0) for a in COMBO_ORDER)
+    entries.append({"id": "combo", "action": "combo", "variant": "连招",
+                    "kind": "combo", "total": combo_total})
+    print(f"combo  {combo_total:2d} 帧（{' → '.join(COMBO_ORDER)}）")
 
-    # 连招：同一 family 的五套动作按顺序串起来，不跨 family 混（否则画风中途跳变）
-    order = ["walk", "wave", "jump", "sit", "fall"]
-    for family, variant in (("v443", "精细版"), ("v315", "简版")):
-        total = sum(e["total"] for e in entries
-                    if e["family"] == family and e["action"] in order)
-        entries.append({"id": f"combo-{family}", "family": family, "action": "combo",
-                        "variant": variant, "kind": "combo", "total": total})
-        print(f"combo-{family:5s} {total:2d} 帧（{' → '.join(order)}）")
+    # 3. 人物卡
+    cards = []
+    for card_id, label, name in CARDS:
+        path = SRC_CARDS / name
+        if not path.exists():
+            print(f"素材不存在：{path}", flush=True)
+            return 1
+        img = cutout(Image.open(path))
+        if img.width > CARD_WIDTH:
+            img = img.resize(
+                (CARD_WIDTH, round(img.height * CARD_WIDTH / img.width)), Image.LANCZOS
+            )
+        out = DST / f"{card_id}.webp"
+        size = to_webp(img, out)
+        cards.append({
+            "id": card_id,
+            "label": label,
+            "sheet": f"assets/burst/{card_id}.webp",
+            "ar": round(img.width / img.height, 4),
+        })
+        print(f"{card_id:7s} {label} {img.width}×{img.height}（{size / 1024:.0f}KB）")
 
+    # 4. 前端消费的数据
     sets_js = DST / "sets.js"
     sets_js.write_text(
         "// 由 tools/sync_actions.py 生成，不要手改。\n"
         "// 每组动作的帧数 / 网格 / 尺寸都从图集实测得出，app.js 只消费这份数据。\n"
         "window.BURST_SETS = "
         + json.dumps(entries, ensure_ascii=False, indent=2)
+        + ";\n\n"
+        "// 人物卡：撞墙姿态帧的底图，点一张换一套造型\n"
+        "window.BURST_CARDS = "
+        + json.dumps(cards, ensure_ascii=False, indent=2)
         + ";\n",
         encoding="utf-8",
     )
-    print(f"输出 {sets_js}（{len(entries)} 组）")
+    print(f"输出 {sets_js}（{len(entries)} 组动作 / {len(cards)} 张人物卡）")
     return 0
 
 

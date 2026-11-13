@@ -121,13 +121,14 @@
     display: $('display'),
     frameStack: $('frameStack'),
     emptyHint: $('emptyHint'),
-    burstHud: $('burstHud'),
-    burstLabel: $('burstLabel'),
-    burstCount: $('burstCount'),
     burstFrame: $('burstFrame'),
     burstModes: $('burstModes'),
     burstActions: $('burstActions'),
-    burstVariants: $('burstVariants'),
+    burstCards: $('burstCards'),
+    burstPad: $('burstPad'),
+    burstTap: $('burstTap'),
+    burstTapSub: $('burstTapSub'),
+    burstHold: $('burstHold'),
     impact: $('impact'),
     impactFrame: $('impactFrame'),
     impactFlash: $('impactFlash'),
@@ -140,7 +141,6 @@
     modeTabs: $('modeTabs'),
     modeCup: $('modeCup'),
     modeRush: $('modeRush'),
-    burstBtn: $('burstBtn'),
     track: $('track'),
     trackFill: $('trackFill'),
     trackGlow: $('trackGlow'),
@@ -458,9 +458,9 @@
   }
 
   function buildFrames() {
-    // 只移除旧帧，保留空图提示、GIF 层与主题三的固定立绘
+    // 只移除旧帧，保留空图提示、GIF 层与主题三的固定立绘/人物卡
     Array.prototype.forEach.call(
-      els.frameStack.querySelectorAll('img:not(.rush-figure)'),
+      els.frameStack.querySelectorAll('img:not(.rush-figure):not(.burst-card-figure)'),
       (img) => img.remove()
     );
     frames.length = 0;
@@ -518,9 +518,10 @@
     const pos = t * (N - 1);
     const pct = t * 100;
     const burstOn = theme === 'burst';
-    // 主题二与冲撞模式都以贴玻璃立绘为主体；主题三只有姿态帧用立绘，其余让位给 sprite 层
+    // 主题二与冲撞模式都以贴玻璃立绘为主体；主题三姿态帧改用人物卡层
     const poseSet = burstOn && currentBurstSet();
-    const figureOn = (burstOn && poseSet && poseSet.kind === 'pose') || mode === 'rush';
+    const poseOn = !!(poseSet && poseSet.kind === 'pose');
+    const figureOn = poseOn || mode === 'rush';
 
     for (let i = 0; i < N; i++) {
       const img = frames[i];
@@ -535,9 +536,11 @@
       img.style.visibility = weight > 0.002 ? 'visible' : 'hidden';
     }
 
+    // rush-figure 只服务冲撞模式；主题三姿态帧用 .burst-card-figure（CSS 按类显示）
     if (els.rushFigure) {
-      els.rushFigure.style.opacity = figureOn ? '1' : '0';
-      els.rushFigure.style.visibility = figureOn ? 'visible' : 'hidden';
+      const rushOn = mode === 'rush';
+      els.rushFigure.style.opacity = rushOn ? '1' : '0';
+      els.rushFigure.style.visibility = rushOn ? 'visible' : 'hidden';
     }
 
     els.slider.style.left = pct + '%';
@@ -649,7 +652,7 @@
 
     // 杯型/冲撞切换三套主题都不展示：滑轨主题只有滑杆，主题三用暴击按钮
     els.modeTabs.hidden = true;
-    els.burstBtn.hidden = !burst;
+    if (els.burstPad) els.burstPad.hidden = !burst;
     if (els.burstModes) els.burstModes.hidden = !burst;
     // 撞击动画设置只服务于已隐藏的冲撞模式，三套主题都收起
     els.impactField.hidden = true;
@@ -663,7 +666,7 @@
       current = 1;
       els.captionLevel.textContent = '暴击';
       els.captionName.textContent = '暴击展示';
-      els.captionDesc.textContent = '点一次推进一帧；连击到 100 脱力。';
+      els.captionDesc.textContent = '点一次推进一帧；按住「长按」自动循环，连击到 30 脱力。';
       els.slider.setAttribute('aria-valuetext', '暴击展示');
       lastIdx = -1;
       render(current);
@@ -753,6 +756,22 @@
     els.rushFigure = img;
   }
 
+  // 主题三「撞墙」姿态帧的底图：三套人物卡共用同一套 transform，
+  // 独立成一个图层，避免和冲撞模式的 rush-figure 抢 src 与 object-fit
+  function buildCardFigure() {
+    const img = document.createElement('img');
+    img.className = 'burst-card-figure';
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    if (BURST_CARDS.length) img.src = BURST_CARDS[0].sheet;
+    img.addEventListener('load', () => {
+      if (booted) render(current);
+    }, { once: true });
+    els.frameStack.appendChild(img);
+    els.cardFigure = img;
+  }
+
   function loadImpactSeries(seriesId) {
     const id = hasImpactSeries(seriesId) ? seriesId : DEFAULTS.impactSeries;
     impact.series = id;
@@ -786,38 +805,37 @@
   /* ------------------------------------------------------------
      主题三：暴击展示（点击驱动逐帧）
 
-     帧号只由点击推进，不点就停在当前帧，不做任何自动播放。
-     素材分两条线，由 assets/burst/sets.js 描述（tools/sync_actions.py 生成）：
+     帧号只由点击推进，不点就停在当前帧。素材由 assets/burst/sets.js
+     描述（tools/sync_actions.py 生成）：
 
-       动作（第一行）  撞玻璃 / 走路 / 挥手 / 蹦跳 / 坐下 / 摔倒 / 连招
-       版本（第二行）  只列当前动作真实存在的版本，只有一个就不显示
+       动作行   撞墙 / 走路 / 挥手 / 蹦跳 / 摔倒 / 坐下 / 连招
+       人物卡   三套造型，只替换「撞墙」姿态帧的底图
 
-       family v443    443×443 8 帧，透明，画质好
-       family v315    315×311 16 帧，需抠底，帧数多一倍
-       family impact  姿态帧（10 组 transform）/ 九宫格（3×3 切块扫描）
-
-     切换动作时优先留在同一 family，避免画风中途跳变；连招也只在同 family 内串联。
-     连击到 30 判定脱力，自动放完当前版本的摔倒序列后停住，再点一下重新站起。
+     单击按钮或点立绘走一帧；按住「长按」按钮 180ms 后每 110ms 自动循环。
+     连击到 30 判定脱力，自动放完摔倒序列后停住，再点一下重新站起。
      ------------------------------------------------------------ */
 
   const BURST_EXHAUST_AT = 30;
-  const BURST_HUD_HIDE_MS = 4000;
+  const BURST_HOLD_DELAY = 180;
+  const BURST_HOLD_INTERVAL = 110;
 
-  // 资产表由 tools/sync_actions.py 生成为 window.BURST_SETS，这里只补语义文案
+  // 资产表由 tools/sync_actions.py 生成为 window.BURST_SETS / BURST_CARDS
   const BURST_SETS = Array.isArray(window.BURST_SETS) ? window.BURST_SETS : [];
-  const BURST_ACTION_ORDER = ['impact', 'walk', 'wave', 'jump', 'sit', 'fall', 'combo'];
+  const BURST_CARDS = Array.isArray(window.BURST_CARDS) ? window.BURST_CARDS : [];
+
+  const BURST_ACTION_ORDER = ['impact', 'walk', 'wave', 'jump', 'fall', 'sit', 'combo'];
   const BURST_ACTION_LABELS = {
-    impact: '撞玻璃',
+    impact: '撞墙',
     walk: '走路',
     wave: '挥手',
     jump: '蹦跳',
-    sit: '坐下',
     fall: '摔倒',
+    sit: '坐下',
     combo: '连招',
   };
 
-  // 连招顺序：走过来 → 挥手 → 跳一下 → 坐下 → 摔倒收尾
-  const BURST_COMBO_ORDER = ['walk', 'wave', 'jump', 'sit', 'fall'];
+  // 连招顺序 = 按钮顺序（撞墙是姿态帧，不参与串联）
+  const BURST_COMBO_ORDER = ['walk', 'wave', 'jump', 'fall', 'sit'];
 
   // 10 帧撞击姿态：贴脸推近 → 压扁 → 回弹 → 下落 → 归位
   const BURST_POSES = [
@@ -842,13 +860,14 @@
 
   const burst = {
     setId: 'impact-pose', // BURST_SETS 里的 id，决定图集/帧数/网格
-    family: 'impact', // 当前画风家族，切动作时优先沿用
+    cardId: BURST_CARDS.length ? BURST_CARDS[0].id : null,
     count: 0, // 累计点击 = 连击数 = 帧计数
     exhausted: false,
     exhaustPlaying: false, // 摔倒序列正在自动播放：此时点击无效，播完才允许复活
     autoTimer: null,
-    hudTimer: null,
     btnTimer: null,
+    holdTimer: null,
+    holdRepeat: null,
   };
 
   function burstTier(combo) {
@@ -859,8 +878,8 @@
   }
 
   function setBurstButton(firing) {
-    if (!els.burstBtn) return;
-    els.burstBtn.classList.toggle('is-firing', firing);
+    if (!els.burstTap) return;
+    els.burstTap.classList.toggle('is-firing', firing);
   }
 
   function burstSetById(id) {
@@ -876,37 +895,35 @@
     return set ? set.action : 'impact';
   }
 
-  // 只有一个版本的动作不显示第二行；正好让「撞玻璃」「走路」这类多版本动作暴露出来
   function burstSetsForAction(action) {
     return BURST_SETS.filter((s) => s.action === action);
   }
 
-  // 切动作时优先留在同一 family，没有该 family 的版本才退回第一组
-  function preferredBurstSet(action, family) {
+  // 每个动作只有一组图集，这里保留函数形态方便以后加画风版本
+  function preferredBurstSet(action) {
     const pool = burstSetsForAction(action);
-    if (!pool.length) return null;
-    return pool.find((s) => s.family === family) || pool[0];
+    return pool.length ? pool[0] : null;
   }
 
-  // 连招：同 family 五套动作按顺序串成一条长序列，缓存一次即可
-  const burstComboCache = new Map();
-  function comboSequence(family) {
-    if (burstComboCache.has(family)) return burstComboCache.get(family);
+  // 连招：五套动作按按钮顺序串成一条长序列，缓存一次即可
+  let burstComboSeq = null;
+  function comboSequence() {
+    if (burstComboSeq) return burstComboSeq;
     const seq = [];
     for (const action of BURST_COMBO_ORDER) {
-      const set = BURST_SETS.find((s) => s.family === family && s.action === action);
+      const set = BURST_SETS.find((s) => s.action === action);
       if (!set) continue;
       for (let i = 0; i < set.total; i++) seq.push({ set, index: i });
     }
-    burstComboCache.set(family, seq);
+    burstComboSeq = seq;
     return seq;
   }
 
-  // 姿态帧：值直接写进 rush-figure 的 CSS 变量
+  // 姿态帧：值直接写进人物卡的 CSS 变量（撞墙的推近/压扁/回弹）
   function paintPoseFrame(index) {
     const total = BURST_POSES.length;
     const pose = BURST_POSES[((index % total) + total) % total];
-    const fig = els.rushFigure;
+    const fig = els.cardFigure;
     if (!fig || !pose) return;
     fig.style.setProperty('--f-scale', pose.s.toFixed(3));
     fig.style.setProperty('--f-sy', pose.sy.toFixed(3));
@@ -937,14 +954,10 @@
     af.style.setProperty('--by', by.toFixed(4) + '%');
   }
 
-  // 让 sprite 层接管画面：隐藏贴玻璃立绘
+  // 让 sprite 层接管画面
   function showSheetLayer() {
     els.frameStack.classList.add('is-action');
     els.frameStack.classList.remove('is-burst-pose');
-    if (els.rushFigure) {
-      els.rushFigure.style.opacity = '0';
-      els.rushFigure.style.visibility = 'hidden';
-    }
   }
 
   // 一次点击推进一帧
@@ -955,17 +968,13 @@
     if (set.kind === 'pose') {
       els.frameStack.classList.remove('is-action');
       els.frameStack.classList.add('is-burst-pose');
-      if (els.rushFigure) {
-        els.rushFigure.style.opacity = '1';
-        els.rushFigure.style.visibility = 'visible';
-      }
       paintPoseFrame(burst.count);
       return;
     }
 
     showSheetLayer();
     if (set.kind === 'combo') {
-      const seq = comboSequence(set.family);
+      const seq = comboSequence();
       if (!seq.length) return;
       const item = seq[((burst.count % seq.length) + seq.length) % seq.length];
       paintSheetFrame(item.set, item.index);
@@ -974,36 +983,26 @@
     paintSheetFrame(set, burst.count);
   }
 
-  function bumpHud(combo, tier, exhausted) {
-    els.burstHud.hidden = false;
-    els.burstLabel.textContent = tier.label;
-    els.burstCount.textContent = exhausted ? '' : '×' + combo;
-    els.burstHud.classList.toggle('is-break', exhausted || tier.label === '鲸涛');
-    els.burstHud.classList.remove('is-fade');
-    restartClass(els.burstHud, 'is-pop');
-
-    clearTimeout(burst.hudTimer);
-    // 脱力状态一直挂着提示，等复活时再收，不然刚显示就被 4 秒定时器抹掉
-    if (exhausted) return;
-    burst.hudTimer = setTimeout(() => {
-      if (els.burstHud.hidden) return;
-      els.burstHud.classList.add('is-fade');
-      setTimeout(() => {
-        if (els.burstHud.classList.contains('is-fade')) els.burstHud.hidden = true;
-      }, 240);
-    }, BURST_HUD_HIDE_MS);
+  // 档位与连击数写在「单击」按钮的副标题上（原来浮在人物上，会挡脸）
+  function setBurstReadout(combo, tier, exhausted) {
+    if (!els.burstTapSub) return;
+    els.burstTapSub.textContent =
+      exhausted || combo <= 0 ? tier.label : tier.label + ' · ×' + combo;
+    els.burstTap.classList.toggle('is-break', exhausted || tier.label === '鲸涛');
+    restartClass(els.burstTapSub, 'is-pop');
   }
 
-  // 脱力：不管当前在哪个动作，都自动放完「同版本」的摔倒序列并停在最后一帧
+  // 脱力：不管当前在哪个动作，都自动放完摔倒序列并停在最后一帧
   function startExhaust() {
     burst.exhausted = true;
     burst.exhaustPlaying = true;
+    stopBurstHold();
     clearTimeout(burst.autoTimer);
-    const family = currentBurstSet() ? currentBurstSet().family : burst.family;
-    const fall =
-      BURST_SETS.find((s) => s.family === family && s.action === 'fall') ||
-      BURST_SETS.find((s) => s.action === 'fall');
-    if (!fall) return;
+    const fall = BURST_SETS.find((s) => s.action === 'fall');
+    if (!fall) {
+      burst.exhaustPlaying = false;
+      return;
+    }
     showSheetLayer();
 
     let i = 0;
@@ -1020,7 +1019,7 @@
     };
     step();
     sound.click(180);
-    bumpHud(BURST_EXHAUST_AT, BURST_TIERS[3], true);
+    setBurstReadout(BURST_EXHAUST_AT, BURST_TIERS[3], true);
     if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
   }
 
@@ -1032,15 +1031,14 @@
     burst.autoTimer = null;
     burst.count = 0;
     paintBurstFrame();
-    clearTimeout(burst.hudTimer);
-    els.burstHud.hidden = true;
-    els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
+    setBurstReadout(0, BURST_TIERS[0], false);
     sound.click(420);
   }
 
   // 一次点击 = 推进一帧，没有其它自动动画
-  function hitBurst() {
+  function hitBurst(opts) {
     if (theme !== 'burst') return;
+    const quiet = !!(opts && opts.quiet);
     if (burst.exhausted) {
       // 摔倒序列还在自动播放时，点击先不响应：否则连点会一路点穿，
       // 脱力动画刚起第一帧就被复活取消，等于看不到脱力。
@@ -1053,7 +1051,7 @@
     paintBurstFrame();
 
     const tier = burstTier(burst.count);
-    bumpHud(burst.count, tier, false);
+    setBurstReadout(burst.count, tier, false);
 
     const set = currentBurstSet();
     const tone =
@@ -1061,66 +1059,112 @@
         ? BURST_POSES[burst.count % BURST_POSES.length].tone
         : 320 + Math.min(burst.count, 60) * 4;
     sound.click(tone);
-    if (navigator.vibrate) navigator.vibrate(6);
+    if (!quiet && navigator.vibrate) navigator.vibrate(6);
 
-    setBurstButton(true);
-    if (els.burstBtn) restartClass(els.burstBtn, 'is-firing');
-    clearTimeout(burst.btnTimer);
-    burst.btnTimer = setTimeout(() => setBurstButton(false), 320);
+    if (!quiet) {
+      setBurstButton(true);
+      restartClass(els.burstTap, 'is-firing');
+      clearTimeout(burst.btnTimer);
+      burst.btnTimer = setTimeout(() => setBurstButton(false), 320);
+    }
 
     if (burst.count >= BURST_EXHAUST_AT) startExhaust();
   }
 
-  /* --- 两级选择器：动作行固定，版本行按当前动作重建 --- */
+  /* --- 长按：按住「长按」按钮自动循环 --- */
+
+  function startBurstHold(event) {
+    if (theme !== 'burst') return;
+    if (event) event.preventDefault();
+    if (burst.holdTimer || burst.holdRepeat) return;
+    sound.ensure();
+    if (event && event.pointerId !== undefined && els.burstHold.setPointerCapture) {
+      try {
+        els.burstHold.setPointerCapture(event.pointerId);
+      } catch (err) {
+        /* 指针已失效，忽略 */
+      }
+    }
+    els.burstHold.classList.add('is-holding');
+    // 按下立刻走一帧，短按也有反馈
+    hitBurst({ quiet: true });
+    burst.holdTimer = setTimeout(() => {
+      burst.holdTimer = null;
+      burst.holdRepeat = setInterval(() => {
+        if (theme !== 'burst' || burst.exhausted) {
+          stopBurstHold();
+          return;
+        }
+        hitBurst({ quiet: true });
+      }, BURST_HOLD_INTERVAL);
+    }, BURST_HOLD_DELAY);
+  }
+
+  function stopBurstHold() {
+    clearTimeout(burst.holdTimer);
+    clearInterval(burst.holdRepeat);
+    burst.holdTimer = null;
+    burst.holdRepeat = null;
+    if (els.burstHold) els.burstHold.classList.remove('is-holding');
+  }
+
+  /* --- 选择器：动作行 + 人物卡行 --- */
 
   function buildBurstControls() {
-    if (!els.burstActions || !els.burstVariants) return;
-
-    const actions = BURST_ACTION_ORDER.filter((a) => burstSetsForAction(a).length);
-    els.burstActions.innerHTML = '';
-    for (const action of actions) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'burst-mode';
-      btn.dataset.action = action;
-      btn.textContent = BURST_ACTION_LABELS[action] || action;
-      els.burstActions.appendChild(btn);
+    if (els.burstActions) {
+      const actions = BURST_ACTION_ORDER.filter((a) => burstSetsForAction(a).length);
+      els.burstActions.innerHTML = '';
+      for (const action of actions) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'burst-mode';
+        btn.dataset.action = action;
+        btn.textContent = BURST_ACTION_LABELS[action] || action;
+        els.burstActions.appendChild(btn);
+      }
     }
+    buildBurstCards();
     syncBurstControls();
   }
 
-  // 同步高亮：动作行按 action，版本行按 setId；版本只有一个时整行隐藏
-  function syncBurstControls() {
-    if (!els.burstActions || !els.burstVariants) return;
-    const action = currentBurstAction();
-
-    els.burstActions.querySelectorAll('[data-action]').forEach((btn) => {
-      btn.classList.toggle('is-active', btn.dataset.action === action);
-    });
-
-    const pool = burstSetsForAction(action);
-    els.burstVariants.innerHTML = '';
-    if (pool.length < 2) {
-      els.burstVariants.hidden = true;
+  function buildBurstCards() {
+    if (!els.burstCards) return;
+    els.burstCards.innerHTML = '';
+    if (!BURST_CARDS.length) {
+      els.burstCards.hidden = true;
       return;
     }
-    els.burstVariants.hidden = false;
-    for (const set of pool) {
+    els.burstCards.hidden = false;
+    for (const card of BURST_CARDS) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'burst-mode is-variant';
-      btn.dataset.set = set.id;
-      btn.textContent = set.variant;
-      btn.classList.toggle('is-active', set.id === burst.setId);
-      els.burstVariants.appendChild(btn);
+      btn.className = 'burst-mode is-card';
+      btn.dataset.card = card.id;
+      btn.textContent = card.label;
+      els.burstCards.appendChild(btn);
+    }
+  }
+
+  // 同步高亮：动作行按 action，人物卡行按 cardId
+  function syncBurstControls() {
+    const action = currentBurstAction();
+    if (els.burstActions) {
+      els.burstActions.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.action === action);
+      });
+    }
+    if (els.burstCards) {
+      els.burstCards.querySelectorAll('[data-card]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.card === burst.cardId);
+      });
     }
   }
 
   // 选中某一组：重置帧号并立刻给一帧，避免停在 baseline 上看不出差别
   function selectBurstSet(set) {
     if (!set) return;
+    stopBurstHold();
     burst.setId = set.id;
-    burst.family = set.family;
     burst.exhausted = false;
     burst.exhaustPlaying = false;
     clearTimeout(burst.autoTimer);
@@ -1128,21 +1172,30 @@
     burst.count = 1;
     syncBurstControls();
     paintBurstFrame();
-    bumpHud(1, burstTier(1), false);
+    setBurstReadout(1, burstTier(1), false);
   }
 
-  // 切动作：留在同 family 的版本上，没有就退回该动作的第一组
   function setBurstAction(action) {
-    selectBurstSet(preferredBurstSet(action, burst.family));
+    selectBurstSet(preferredBurstSet(action));
+  }
+
+  // 换人物卡：换掉「撞墙」姿态帧的底图，并自动切到撞墙动作
+  function setBurstCard(cardId) {
+    const card = BURST_CARDS.find((c) => c.id === cardId) || BURST_CARDS[0];
+    if (!card) return;
+    burst.cardId = card.id;
+    if (els.cardFigure && els.cardFigure.getAttribute('src') !== card.sheet) {
+      els.cardFigure.src = card.sheet;
+    }
+    setBurstAction('impact');
   }
 
   // 离开主题三或重置：清掉连击、帧态与残留类
   function resetBurst() {
+    stopBurstHold();
     clearTimeout(burst.autoTimer);
-    clearTimeout(burst.hudTimer);
     clearTimeout(burst.btnTimer);
     burst.autoTimer = null;
-    burst.hudTimer = null;
     burst.btnTimer = null;
     burst.count = 0;
     burst.exhausted = false;
@@ -1150,7 +1203,6 @@
 
     const home = burstSetById('impact-pose');
     burst.setId = home ? home.id : 'impact-pose';
-    burst.family = home ? home.family : 'impact';
 
     els.frameStack.classList.remove('is-action');
     els.frameStack.classList.remove('is-burst-pose');
@@ -1158,16 +1210,17 @@
     els.display.classList.remove('is-hit');
     els.impactFlash.classList.remove('is-on');
     els.impactCracks.classList.remove('is-on');
-    if (els.rushFigure) {
+    if (els.cardFigure) {
       for (const p of ['--f-scale', '--f-sy', '--f-rot', '--f-x', '--f-y']) {
-        els.rushFigure.style.removeProperty(p);
+        els.cardFigure.style.removeProperty(p);
       }
     }
     syncBurstControls();
-    if (els.burstHud) {
-      els.burstHud.hidden = true;
-      els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
+    if (els.burstTapSub) {
+      els.burstTapSub.textContent = '砰';
+      els.burstTapSub.classList.remove('is-pop');
     }
+    if (els.burstTap) els.burstTap.classList.remove('is-break');
     setBurstButton(false);
   }
 
@@ -1463,18 +1516,27 @@
       if (impact.ready) playImpact(0.4);
     });
 
-    // 主题三：暴击按钮或直接点击立绘都能推进一帧
-    els.burstBtn.addEventListener('click', () => {
+    // 主题三：单击按钮、长按按钮或直接点立绘都能推进一帧
+    els.burstTap.addEventListener('click', () => {
       sound.ensure();
       hitBurst();
     });
+    els.burstHold.addEventListener('pointerdown', startBurstHold);
+    els.burstHold.addEventListener('pointerup', stopBurstHold);
+    els.burstHold.addEventListener('pointercancel', stopBurstHold);
+    els.burstHold.addEventListener('lostpointercapture', stopBurstHold);
+    els.burstPad.addEventListener('contextmenu', (e) => e.preventDefault());
     els.display.addEventListener('click', () => {
       if (theme !== 'burst') return;
       sound.ensure();
       hitBurst();
     });
+    // 连点立绘不弹系统菜单，也不触发双击缩放
+    els.display.addEventListener('contextmenu', (e) => {
+      if (theme === 'burst') e.preventDefault();
+    });
 
-    // 主题三：动作 / 版本切换（事件委托，新增动作不用再绑事件）
+    // 主题三：动作 / 人物卡切换（事件委托，改数据不用再绑事件）
     els.burstModes.addEventListener('click', (e) => {
       const actionBtn = e.target.closest('[data-action]');
       if (actionBtn) {
@@ -1482,10 +1544,10 @@
         setBurstAction(actionBtn.dataset.action);
         return;
       }
-      const setBtn = e.target.closest('[data-set]');
-      if (!setBtn) return;
+      const cardBtn = e.target.closest('[data-card]');
+      if (!cardBtn) return;
       sound.ensure();
-      selectBurstSet(burstSetById(setBtn.dataset.set));
+      setBurstCard(cardBtn.dataset.card);
     });
 
     els.inputTheme.addEventListener('change', () => {
@@ -1631,6 +1693,7 @@
 
     buildTicks();
     buildRushFigure();
+    buildCardFigure();
     buildSwatches();
     buildImpactOptions();
     // 两级选择器的按钮由 BURST_SETS 生成，必须在 applyTheme（内部会 resetBurst）之前建好

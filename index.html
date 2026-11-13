@@ -35,15 +35,8 @@
           把 5 张图片放进 <code>assets/aligned/</code>，命名为<br>
           <code>a.jpeg · c.jpeg · d.jpeg · g.jpeg · h.jpeg</code>
         </p>
-        <!-- 主题三「真实动作帧」：16 帧跌倒序列的 sprite 图集，逐帧由点击推进 -->
+        <!-- 主题三动作帧：sprite 图集，逐帧由点击推进；人物卡层由 app.js 挂载 -->
         <div class="burst-frame" id="burstFrame" aria-hidden="true"></div>
-      </div>
-
-      <!-- 主题三：连击跳字（砰砰 +1 ×N） -->
-      <div class="burst-hud" id="burstHud" hidden aria-hidden="true">
-        <span class="burst-hud-label" id="burstLabel">砰</span>
-        <span class="burst-hud-plus">+1</span>
-        <span class="burst-hud-count" id="burstCount">×1</span>
       </div>
 
       <!-- 撞玻璃层：滑片一动，她就贴到玻璃上撞一下 -->
@@ -93,12 +86,23 @@
         <button class="mode-tab" id="modeRush" role="tab" aria-selected="false" type="button">冲撞</button>
       </div>
 
-      <!-- 主题三：第一行动作，第二行版本（按钮由 app.js 按 BURST_SETS 生成） -->
+      <!-- 主题三：第一行动作，第二行人物卡（按钮由 app.js 按 BURST_SETS / BURST_CARDS 生成） -->
       <div class="burst-modes" id="burstModes" role="group" aria-label="主题三动作" hidden>
-        <div class="burst-row" id="burstActions"></div>
-        <div class="burst-row burst-row-variant" id="burstVariants"></div>
+        <div class="burst-row burst-row-actions" id="burstActions"></div>
+        <div class="burst-row burst-row-cards" id="burstCards" role="group" aria-label="人物卡"></div>
       </div>
-      <button class="burst-btn" id="burstBtn" type="button" hidden>暴击展示</button>
+
+      <!-- 主题三：上为单击（推进一帧，副标题显示档位），下为长按（自动循环） -->
+      <div class="burst-pad" id="burstPad" hidden>
+        <button class="burst-btn burst-btn-tap" id="burstTap" type="button">
+          <span class="burst-tap-main">单击</span>
+          <span class="burst-tap-sub" id="burstTapSub">砰</span>
+        </button>
+        <button class="burst-btn burst-btn-hold" id="burstHold" type="button">
+          <span class="burst-hold-main">长按</span>
+          <span class="burst-hold-sub">按住自动循环</span>
+        </button>
+      </div>
 
       <div class="meter">
         <span class="meter-value" id="meterValue">50</span>

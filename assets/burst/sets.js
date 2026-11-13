@@ -3,158 +3,88 @@
 window.BURST_SETS = [
   {
     "id": "impact-pose",
-    "family": "impact",
     "action": "impact",
     "variant": "姿态帧",
     "kind": "pose",
     "total": 10
   },
   {
-    "id": "walk-443",
-    "family": "v443",
+    "id": "walk",
     "action": "walk",
-    "variant": "精细版",
     "kind": "sheet",
-    "sheet": "assets/burst/walk-443.webp",
+    "sheet": "assets/burst/walk.webp",
     "cols": 4,
     "rows": 2,
     "total": 8,
     "ar": 1.0
   },
   {
-    "id": "wave-443",
-    "family": "v443",
+    "id": "wave",
     "action": "wave",
-    "variant": "精细版",
     "kind": "sheet",
-    "sheet": "assets/burst/wave-443.webp",
+    "sheet": "assets/burst/wave.webp",
     "cols": 4,
     "rows": 2,
     "total": 8,
     "ar": 1.0
   },
   {
-    "id": "jump-443",
-    "family": "v443",
+    "id": "jump",
     "action": "jump",
-    "variant": "精细版",
     "kind": "sheet",
-    "sheet": "assets/burst/jump-443.webp",
+    "sheet": "assets/burst/jump.webp",
     "cols": 4,
     "rows": 2,
     "total": 8,
     "ar": 1.0
   },
   {
-    "id": "sit-443",
-    "family": "v443",
+    "id": "sit",
     "action": "sit",
-    "variant": "精细版",
     "kind": "sheet",
-    "sheet": "assets/burst/sit-443.webp",
+    "sheet": "assets/burst/sit.webp",
     "cols": 4,
     "rows": 2,
     "total": 8,
     "ar": 1.0
   },
   {
-    "id": "fall-443",
-    "family": "v443",
+    "id": "fall",
     "action": "fall",
-    "variant": "精细版",
     "kind": "sheet",
-    "sheet": "assets/burst/fall-443.webp",
+    "sheet": "assets/burst/fall.webp",
     "cols": 4,
     "rows": 2,
     "total": 8,
     "ar": 1.0
   },
   {
-    "id": "walk-315",
-    "family": "v315",
-    "action": "walk",
-    "variant": "简版",
-    "kind": "sheet",
-    "sheet": "assets/burst/walk-315.webp",
-    "cols": 4,
-    "rows": 4,
-    "total": 16,
-    "ar": 1.0129
-  },
-  {
-    "id": "wave-315",
-    "family": "v315",
-    "action": "wave",
-    "variant": "简版",
-    "kind": "sheet",
-    "sheet": "assets/burst/wave-315.webp",
-    "cols": 4,
-    "rows": 4,
-    "total": 16,
-    "ar": 1.0129
-  },
-  {
-    "id": "jump-315",
-    "family": "v315",
-    "action": "jump",
-    "variant": "简版",
-    "kind": "sheet",
-    "sheet": "assets/burst/jump-315.webp",
-    "cols": 4,
-    "rows": 4,
-    "total": 16,
-    "ar": 1.0129
-  },
-  {
-    "id": "sit-315",
-    "family": "v315",
-    "action": "sit",
-    "variant": "简版",
-    "kind": "sheet",
-    "sheet": "assets/burst/sit-315.webp",
-    "cols": 4,
-    "rows": 4,
-    "total": 16,
-    "ar": 1.0129
-  },
-  {
-    "id": "fall-315",
-    "family": "v315",
-    "action": "fall",
-    "variant": "简版",
-    "kind": "sheet",
-    "sheet": "assets/burst/fall-315.webp",
-    "cols": 4,
-    "rows": 4,
-    "total": 16,
-    "ar": 1.0129
-  },
-  {
-    "id": "impact-grid",
-    "family": "impact",
-    "action": "impact",
-    "variant": "九宫格",
-    "kind": "sheet",
-    "sheet": "assets/burst/impact-grid.webp",
-    "cols": 3,
-    "rows": 3,
-    "total": 9,
-    "ar": 1.0
-  },
-  {
-    "id": "combo-v443",
-    "family": "v443",
+    "id": "combo",
     "action": "combo",
-    "variant": "精细版",
+    "variant": "连招",
     "kind": "combo",
     "total": 40
+  }
+];
+
+// 人物卡：撞墙姿态帧的底图，点一张换一套造型
+window.BURST_CARDS = [
+  {
+    "id": "card-1",
+    "label": "微澜",
+    "sheet": "assets/burst/card-1.webp",
+    "ar": 0.5669
   },
   {
-    "id": "combo-v315",
-    "family": "v315",
-    "action": "combo",
-    "variant": "简版",
-    "kind": "combo",
-    "total": 80
+    "id": "card-2",
+    "label": "丰满",
+    "sheet": "assets/burst/card-2.webp",
+    "ar": 0.5669
+  },
+  {
+    "id": "card-3",
+    "label": "汹涌",
+    "sheet": "assets/burst/card-3.webp",
+    "ar": 0.5669
   }
 ];
