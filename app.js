@@ -124,7 +124,10 @@
     burstHud: $('burstHud'),
     burstLabel: $('burstLabel'),
     burstCount: $('burstCount'),
-    burstShards: $('burstShards'),
+    burstFrame: $('burstFrame'),
+    burstModes: $('burstModes'),
+    burstModePose: $('burstModePose'),
+    burstModeAction: $('burstModeAction'),
     impact: $('impact'),
     impactFrame: $('impactFrame'),
     impactFlash: $('impactFlash'),
@@ -515,8 +518,8 @@
     const pos = t * (N - 1);
     const pct = t * 100;
     const burstOn = theme === 'burst';
-    // 主题二与冲撞模式都以贴玻璃立绘为主体，杯型六帧全部隐藏
-    const figureOn = burstOn || mode === 'rush';
+    // 主题二与冲撞模式都以贴玻璃立绘为主体；主题三切到动作帧时让位给 sprite 层
+    const figureOn = (burstOn && burst.mode !== 'action') || mode === 'rush';
 
     for (let i = 0; i < N; i++) {
       const img = frames[i];
@@ -646,6 +649,7 @@
     // 杯型/冲撞切换三套主题都不展示：滑轨主题只有滑杆，主题三用暴击按钮
     els.modeTabs.hidden = true;
     els.burstBtn.hidden = !burst;
+    if (els.burstModes) els.burstModes.hidden = !burst;
     // 撞击动画设置只服务于已隐藏的冲撞模式，三套主题都收起
     els.impactField.hidden = true;
 
@@ -658,10 +662,11 @@
       current = 1;
       els.captionLevel.textContent = '暴击';
       els.captionName.textContent = '暴击展示';
-      els.captionDesc.textContent = '点击立绘，撞一次玻璃。';
+      els.captionDesc.textContent = '点一次推进一帧；连击到 100 脱力。';
       els.slider.setAttribute('aria-valuetext', '暴击展示');
       lastIdx = -1;
       render(current);
+      paintBurstFrame();
       saveConfig();
       return;
     }
@@ -778,142 +783,225 @@
   }
 
   /* ------------------------------------------------------------
-     主题三：暴击展示（固定立绘 + 程序化冲击 + 连击）
-     素材里的 anim.gif 实测是「同一张立绘按 3×3 切块的循环」，
-     不是动作序列，做不了逐帧动画；改用静止立绘做冲击演出。
-     所有表现由同一次点击同步派发，点击与画面天然一致。
+     主题三：暴击展示（点击驱动逐帧）
+
+     撞玻璃那套 GIF 的 9 帧是同一张立绘的 3×3 切块，不是动作序列，
+     所以这里给两套帧源做对照：
+       pose   —— 贴玻璃立绘 + 10 组姿态参数（贴脸/挤压/回弹/滑落）
+       action —— 跌倒动画的 16 帧真实动作序列（4×4 sprite 图集）
+     帧号只由点击推进，不点就停在当前帧，不做任何自动播放；
+     连击到 100 判定脱力，自动放完跌倒序列后停住，再点一下重新站起。
      ------------------------------------------------------------ */
 
-  const BURST_DECAY_MS = 900;
+  const BURST_EXHAUST_AT = 100;
+  const BURST_ACTION_COLS = 4;
+  const BURST_ACTION_TOTAL = 16;
+  const BURST_ACTION_SHEET = 'assets/impact/fall-16/sheet.webp';
+  const BURST_HUD_HIDE_MS = 4000;
 
-  // 连击档位：点得越急，档位越高，冲击越快越猛
-  const BURST_TIERS = [
-    { upTo: 2, label: '砰', punch: 1.035, shake: 5, ms: 300, shards: 0, tone: 300 },
-    { upTo: 5, label: '砰砰', punch: 1.06, shake: 8, ms: 250, shards: 6, tone: 420 },
-    { upTo: 9, label: '鲸涛', punch: 1.09, shake: 12, ms: 210, shards: 12, tone: 540 },
-    { upTo: Infinity, label: '鲸祖降临', punch: 1.13, shake: 16, ms: 170, shards: 18, tone: 660 },
+  // 10 帧撞击姿态：贴脸推近 → 压扁 → 回弹 → 下落 → 归位
+  const BURST_POSES = [
+    { s: 1.000, sy: 1.000, rot: 0.0, x: 0, y: 0, tone: 300 },
+    { s: 1.022, sy: 0.994, rot: -0.4, x: 0, y: -2, tone: 330 },
+    { s: 1.056, sy: 0.978, rot: -0.9, x: 0, y: -4, tone: 370 },
+    { s: 1.090, sy: 0.954, rot: -1.3, x: 1, y: -3, tone: 410 },
+    { s: 1.116, sy: 0.930, rot: -1.6, x: 2, y: -1, tone: 450 },
+    { s: 1.070, sy: 0.962, rot: 0.6, x: -2, y: 2, tone: 480 },
+    { s: 1.022, sy: 0.990, rot: 1.2, x: -3, y: 6, tone: 510 },
+    { s: 1.000, sy: 0.996, rot: 0.8, x: -2, y: 10, tone: 530 },
+    { s: 1.006, sy: 1.000, rot: 0.3, x: 0, y: 5, tone: 510 },
+    { s: 1.000, sy: 1.000, rot: 0.0, x: 0, y: 0, tone: 480 },
   ];
 
-  const burst = { combo: 0, last: 0, decay: null };
-  let burstFadeTimer = null;
-  let burstPunchTimer = null;
+  const BURST_TIERS = [
+    { upTo: 9, label: '砰' },
+    { upTo: 49, label: '砰砰' },
+    { upTo: 99, label: '鲸涛' },
+    { upTo: Infinity, label: '脱力' },
+  ];
 
-  function burstTierIndex(combo) {
+  const burst = {
+    mode: 'pose', // pose = 姿态帧，action = 真实动作帧
+    count: 0, // 累计点击 = 连击数 = 帧计数
+    exhausted: false,
+    autoTimer: null,
+    hudTimer: null,
+    btnTimer: null,
+  };
+
+  function burstTier(combo) {
     for (let i = 0; i < BURST_TIERS.length; i++) {
-      if (combo <= BURST_TIERS[i].upTo) return i;
+      if (combo <= BURST_TIERS[i].upTo) return BURST_TIERS[i];
     }
-    return BURST_TIERS.length - 1;
+    return BURST_TIERS[BURST_TIERS.length - 1];
   }
 
-  // 播放中只做视觉高亮，不改文案、不禁用：按钮始终可点
   function setBurstButton(firing) {
     if (!els.burstBtn) return;
     els.burstBtn.classList.toggle('is-firing', firing);
   }
 
-  function punchFrame(tier, intensity) {
-    if (reducedMotion.matches) return;
-    const stack = els.frameStack;
-    const ms = Math.round(tier.ms * (1 - 0.4 * intensity));
-    stack.style.setProperty('--punch', tier.punch.toFixed(3));
-    stack.style.setProperty('--punch-ms', ms + 'ms');
-    restartClass(stack, 'is-punch');
-    // 兜底：后台标签页动画被节流时 animationend 不触发
-    clearTimeout(burstPunchTimer);
-    burstPunchTimer = setTimeout(() => stack.classList.remove('is-punch'), ms + 80);
+  function burstFrameTotal() {
+    return burst.mode === 'action' ? BURST_ACTION_TOTAL : BURST_POSES.length;
   }
 
-  function spawnShards(count, intensity) {
-    if (!els.burstShards || reducedMotion.matches) return;
-    // 连点太快时限制活动碎片数量，避免弱机掉帧
-    while (els.burstShards.children.length > 60) {
-      els.burstShards.firstElementChild.remove();
-    }
-    for (let i = 0; i < count; i++) {
-      const shard = document.createElement('span');
-      shard.className = 'shard';
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 48 + Math.random() * 78 + intensity * 52;
-      const dur = Math.round(360 + Math.random() * 200 - intensity * 90);
-      shard.style.setProperty('--dx', (Math.cos(angle) * dist).toFixed(1) + 'px');
-      shard.style.setProperty('--dy', (Math.sin(angle) * dist).toFixed(1) + 'px');
-      shard.style.setProperty('--rot', Math.round(Math.random() * 720 - 360) + 'deg');
-      shard.style.setProperty('--size', (5 + Math.random() * 8).toFixed(1) + 'px');
-      shard.style.setProperty('--dur', dur + 'ms');
-      els.burstShards.appendChild(shard);
-      shard.addEventListener('animationend', () => shard.remove(), { once: true });
-      // 兜底：动效被系统禁用或标签页后台节流时 animationend 不触发
-      setTimeout(() => shard.remove(), dur + 260);
-    }
+  // 姿态帧：值直接写进 rush-figure 的 CSS 变量
+  function paintPoseFrame(index) {
+    const pose = BURST_POSES[index % BURST_POSES.length];
+    const fig = els.rushFigure;
+    if (!fig || !pose) return;
+    fig.style.setProperty('--f-scale', pose.s.toFixed(3));
+    fig.style.setProperty('--f-sy', pose.sy.toFixed(3));
+    fig.style.setProperty('--f-rot', pose.rot.toFixed(2) + 'deg');
+    fig.style.setProperty('--f-x', pose.x + 'px');
+    fig.style.setProperty('--f-y', pose.y + 'px');
   }
 
-  function bumpHud(combo, tier) {
+  // 动作帧：只改 background-position，图集换帧零解码成本
+  function paintActionFrame(index) {
+    if (!els.burstFrame) return;
+    const i = ((index % BURST_ACTION_TOTAL) + BURST_ACTION_TOTAL) % BURST_ACTION_TOTAL;
+    const col = i % BURST_ACTION_COLS;
+    const row = Math.floor(i / BURST_ACTION_COLS);
+    els.burstFrame.style.setProperty('--c', col);
+    els.burstFrame.style.setProperty('--r', row);
+  }
+
+  // 一次点击推进一帧：两套帧源共用同一个帧计数
+  function paintBurstFrame() {
+    const action = burst.mode === 'action';
+    els.frameStack.classList.toggle('is-action', action);
+    els.frameStack.classList.toggle('is-burst-pose', !action);
+    // 动作帧模式下让位给 sprite 层，否则贴玻璃立绘会盖住它
+    if (els.rushFigure) {
+      els.rushFigure.style.opacity = action ? '0' : '1';
+      els.rushFigure.style.visibility = action ? 'hidden' : 'visible';
+    }
+    if (action) paintActionFrame(burst.count);
+    else paintPoseFrame(burst.count);
+  }
+
+  function bumpHud(combo, tier, exhausted) {
     els.burstHud.hidden = false;
     els.burstLabel.textContent = tier.label;
-    els.burstCount.textContent = '×' + combo;
-    els.burstHud.classList.toggle('is-break', tier.label === '鲸祖降临');
+    els.burstCount.textContent = exhausted ? '' : '×' + combo;
+    els.burstHud.classList.toggle('is-break', exhausted || tier.label === '鲸涛');
     els.burstHud.classList.remove('is-fade');
     restartClass(els.burstHud, 'is-pop');
+
+    clearTimeout(burst.hudTimer);
+    burst.hudTimer = setTimeout(() => {
+      if (els.burstHud.hidden) return;
+      els.burstHud.classList.add('is-fade');
+      setTimeout(() => {
+        if (els.burstHud.classList.contains('is-fade')) els.burstHud.hidden = true;
+      }, 240);
+    }, BURST_HUD_HIDE_MS);
   }
 
-  // 一次点击 = 一次撞击：缩放、震屏、闪白、裂纹、碎片、跳字、音效同一帧派发
+  // 脱力：自动放完跌倒 16 帧，停在最后一帧，等用户点一下重新站起
+  function startExhaust() {
+    burst.exhausted = true;
+    clearTimeout(burst.autoTimer);
+    els.frameStack.classList.add('is-action');
+
+    let i = 0;
+    const step = () => {
+      burst.count = i;
+      paintActionFrame(i);
+      i += 1;
+      if (i < BURST_ACTION_TOTAL) {
+        burst.autoTimer = setTimeout(step, 70);
+      } else {
+        burst.count = BURST_ACTION_TOTAL - 1;
+      }
+    };
+    step();
+    sound.click(180);
+    bumpHud(BURST_EXHAUST_AT, BURST_TIERS[3], true);
+    if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
+  }
+
+  // 脱力后点一下：重新站起来，从第 1 帧继续
+  function reviveBurst() {
+    burst.exhausted = false;
+    clearTimeout(burst.autoTimer);
+    burst.autoTimer = null;
+    burst.count = 0;
+    paintBurstFrame();
+    bumpHud(0, burstTier(1), false);
+    els.burstHud.hidden = true;
+    els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
+    sound.click(420);
+  }
+
+  // 一次点击 = 推进一帧，没有其它自动动画
   function hitBurst() {
     if (theme !== 'burst') return;
+    if (burst.exhausted) {
+      reviveBurst();
+      return;
+    }
 
-    const now = performance.now();
-    const gap = burst.last ? now - burst.last : 0;
-    const chained = burst.last > 0 && gap <= BURST_DECAY_MS;
-    burst.combo = chained ? burst.combo + 1 : 1;
-    burst.last = now;
+    burst.count += 1;
+    paintBurstFrame();
 
-    const ti = burstTierIndex(burst.combo);
-    const tier = BURST_TIERS[ti];
-    // 间隔越短力度越大；第一次点击给固定中等力度
-    const intensity = chained ? clamp01((BURST_DECAY_MS - gap) / BURST_DECAY_MS) : 0.4;
-    const strength = clamp01(0.32 + 0.5 * intensity + 0.04 * ti);
+    const tier = burstTier(burst.count);
+    bumpHud(burst.count, tier, false);
 
-    strike(strength);
-    sound.click(tier.tone);
-    punchFrame(tier, intensity);
-    spawnShards(tier.shards, intensity);
-    bumpHud(burst.combo, tier);
+    const pose = BURST_POSES[burst.count % BURST_POSES.length];
+    sound.click(burst.mode === 'pose' ? pose.tone : 320 + Math.min(burst.count, 60) * 4);
+    if (navigator.vibrate) navigator.vibrate(6);
 
     setBurstButton(true);
-    restartClass(els.burstBtn, 'is-firing');
-    if (navigator.vibrate) navigator.vibrate(8 + ti * 4);
+    if (els.burstBtn) restartClass(els.burstBtn, 'is-firing');
+    clearTimeout(burst.btnTimer);
+    burst.btnTimer = setTimeout(() => setBurstButton(false), 320);
 
-    clearTimeout(burst.decay);
-    burst.decay = setTimeout(resetBurstCombo, BURST_DECAY_MS);
+    if (burst.count >= BURST_EXHAUST_AT) startExhaust();
   }
 
-  function resetBurstCombo() {
-    burst.combo = 0;
-    burst.last = 0;
-    if (!els.burstHud) return;
-    els.burstHud.classList.remove('is-pop', 'is-break');
-    els.burstHud.classList.add('is-fade');
-    clearTimeout(burstFadeTimer);
-    burstFadeTimer = setTimeout(() => {
-      els.burstHud.hidden = true;
-      els.burstHud.classList.remove('is-fade');
-    }, 240);
+  function setBurstMode(next) {
+    if (next !== 'pose' && next !== 'action') return;
+    burst.mode = next;
+    burst.exhausted = false;
+    clearTimeout(burst.autoTimer);
+    burst.autoTimer = null;
+    burst.count = 0;
+    els.burstModePose.classList.toggle('is-active', next === 'pose');
+    els.burstModeAction.classList.toggle('is-active', next === 'action');
+    paintBurstFrame();
+    // 切过去就先给一帧，避免停在 baseline 上看不出差别
+    burst.count = 1;
+    paintBurstFrame();
+    bumpHud(1, burstTier(1), false);
   }
 
-  // 离开主题三或重置：清掉连击与残留动画
+  // 离开主题三或重置：清掉连击、帧态与残留类
   function resetBurst() {
-    clearTimeout(burst.decay);
-    clearTimeout(burstFadeTimer);
-    clearTimeout(burstPunchTimer);
-    burst.combo = 0;
-    burst.last = 0;
-    burst.decay = null;
+    clearTimeout(burst.autoTimer);
+    clearTimeout(burst.hudTimer);
+    clearTimeout(burst.btnTimer);
+    burst.autoTimer = null;
+    burst.hudTimer = null;
+    burst.btnTimer = null;
+    burst.count = 0;
+    burst.exhausted = false;
+    burst.mode = 'pose';
+
+    els.frameStack.classList.remove('is-action');
+    els.frameStack.classList.remove('is-burst-pose');
     els.frameStack.classList.remove('is-punch');
-    els.frameStack.style.removeProperty('--punch');
-    els.frameStack.style.removeProperty('--punch-ms');
     els.display.classList.remove('is-hit');
     els.impactFlash.classList.remove('is-on');
     els.impactCracks.classList.remove('is-on');
-    if (els.burstShards) els.burstShards.innerHTML = '';
+    if (els.rushFigure) {
+      for (const p of ['--f-scale', '--f-sy', '--f-rot', '--f-x', '--f-y']) {
+        els.rushFigure.style.removeProperty(p);
+      }
+    }
+    if (els.burstModePose) els.burstModePose.classList.add('is-active');
+    if (els.burstModeAction) els.burstModeAction.classList.remove('is-active');
     if (els.burstHud) {
       els.burstHud.hidden = true;
       els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
@@ -1213,7 +1301,7 @@
       if (impact.ready) playImpact(0.4);
     });
 
-    // 主题三：暴击按钮或直接点击立绘都能打一次
+    // 主题三：暴击按钮或直接点击立绘都能推进一帧
     els.burstBtn.addEventListener('click', () => {
       sound.ensure();
       hitBurst();
@@ -1222,6 +1310,16 @@
       if (theme !== 'burst') return;
       sound.ensure();
       hitBurst();
+    });
+
+    // 主题三：两套帧源对照
+    els.burstModePose.addEventListener('click', () => {
+      sound.ensure();
+      setBurstMode('pose');
+    });
+    els.burstModeAction.addEventListener('click', () => {
+      sound.ensure();
+      setBurstMode('action');
     });
 
     els.inputTheme.addEventListener('change', () => {

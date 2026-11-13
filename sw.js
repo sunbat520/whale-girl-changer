@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v9';
+const CACHE_NAME = 'whale-changer-v10';
 
 const PRECACHE = [
   './',
@@ -31,6 +31,8 @@ const PRECACHE = [
   './assets/g.jpeg',
   // 主题三：默认撞击立绘；其余九组按需缓存（见 cacheFirst）
   './assets/impact/new-burst/still.png',
+  // 主题三「真实动作帧」：16 帧跌倒序列的 sprite 图集
+  './assets/impact/fall-16/sheet.webp',
 ];
 
 self.addEventListener('install', (event) => {

@@ -1196,6 +1196,48 @@ body.theme-burst .display {
   cursor: pointer;
 }
 
+/* 主题三：帧源对照（① 姿态帧 / ② 真实动作帧） */
+.burst-modes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.burst-modes[hidden] {
+  display: none;
+}
+
+.burst-mode {
+  font: inherit;
+  padding: 9px 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), background 0.18s var(--ease), border-color 0.18s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.burst-mode:hover {
+  color: #ffffff;
+}
+
+.burst-mode:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.burst-mode.is-active {
+  color: #04101d;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .burst-btn {
   font: inherit;
   min-width: 152px;
@@ -1323,58 +1365,42 @@ body.theme-burst .display {
   color: #ffe083;
 }
 
-/* 主题三：碎玻璃粒子 */
-.burst-shards {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.shard {
+/* 主题三：真实动作帧（16 帧 4×4 sprite 图集），换帧只改 background-position */
+.burst-frame {
   position: absolute;
   left: 50%;
-  top: 46%;
-  width: var(--size, 8px);
-  height: var(--size, 8px);
-  margin: calc(var(--size, 8px) / -2) 0 0 calc(var(--size, 8px) / -2);
-  background: linear-gradient(150deg, #ffffff, rgba(168, 224, 255, 0.5));
-  clip-path: polygon(50% 0, 100% 62%, 12% 100%);
-  opacity: 0;
-  animation: shard-fly var(--dur, 420ms) cubic-bezier(0.16, 0.72, 0.28, 1) forwards;
-  will-change: transform, opacity;
+  top: 50%;
+  width: 100%;
+  aspect-ratio: 315 / 311;
+  transform: translate(-50%, -50%);
+  background-image: url("assets/impact/fall-16/sheet.webp");
+  background-repeat: no-repeat;
+  background-size: 400% 400%;
+  background-position: calc(var(--c, 0) * 33.3333%) calc(var(--r, 0) * 33.3333%);
+  pointer-events: none;
+  user-select: none;
+  display: none;
 }
 
-@keyframes shard-fly {
-  0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.45); }
-  14% { opacity: 1; }
-  100% {
-    opacity: 0;
-    transform: translate(var(--dx, 70px), var(--dy, 70px)) rotate(var(--rot, 220deg)) scale(1);
-  }
+.frame-stack.is-action .burst-frame {
+  display: block;
 }
 
-/* 主题三：冲击缩放（镜头撞上去），与 #display 的位移震屏叠加 */
-.frame-stack.is-punch {
-  animation: burst-punch var(--punch-ms, 260ms) cubic-bezier(0.2, 0.7, 0.3, 1) both;
-}
-
-@keyframes burst-punch {
-  0% { transform: scale(1); }
-  16% { transform: scale(var(--punch, 1.06)); }
-  58% { transform: scale(calc(1 + (var(--punch, 1.06) - 1) * 0.32)); }
-  100% { transform: scale(1); }
+/* 主题三：姿态帧，值由 JS 写进 CSS 变量，点一次换一组。
+   不做 transition：逐帧推进是离散跳变，加过渡反而糊成一团，
+   也会在后台标签页被节流时卡在中间帧。 */
+.frame-stack.is-burst-pose .rush-figure {
+  transform:
+    translate3d(var(--f-x, 0px), var(--f-y, 0px), 0)
+    rotate(var(--f-rot, 0deg))
+    scale(var(--f-scale, 1))
+    scaleY(var(--f-sy, 1));
+  transform-origin: 50% 62%;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .frame-stack.is-punch,
   .burst-hud.is-pop {
     animation: none;
-  }
-
-  .burst-shards {
-    display: none;
   }
 }
 

@@ -35,8 +35,8 @@
           把 5 张图片放进 <code>assets/aligned/</code>，命名为<br>
           <code>a.jpeg · c.jpeg · d.jpeg · g.jpeg · h.jpeg</code>
         </p>
-        <!-- 主题三：点击时炸开的碎玻璃粒子 -->
-        <div class="burst-shards" id="burstShards" aria-hidden="true"></div>
+        <!-- 主题三「真实动作帧」：16 帧跌倒序列的 sprite 图集，逐帧由点击推进 -->
+        <div class="burst-frame" id="burstFrame" aria-hidden="true"></div>
       </div>
 
       <!-- 主题三：连击跳字（砰砰 +1 ×N） -->
@@ -93,7 +93,11 @@
         <button class="mode-tab" id="modeRush" role="tab" aria-selected="false" type="button">冲撞</button>
       </div>
 
-      <!-- 主题三：用暴击展示按钮替代杯型/冲撞切换 -->
+      <!-- 主题三：两套帧源对照演示，点击立绘推进一帧 -->
+      <div class="burst-modes" id="burstModes" role="group" aria-label="主题三帧源" hidden>
+        <button class="burst-mode is-active" id="burstModePose" type="button">① 撞击姿态帧 · 10</button>
+        <button class="burst-mode" id="burstModeAction" type="button">② 真实动作帧 · 16</button>
+      </div>
       <button class="burst-btn" id="burstBtn" type="button" hidden>暴击展示</button>
 
       <div class="meter">
