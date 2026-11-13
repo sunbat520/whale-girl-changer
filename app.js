@@ -2,7 +2,7 @@
    鲸鱼娘变化器 — 交互逻辑
    主题一（默认）：v1 鲸系浓度滑轨（经典 5 档三视图）
    主题二：鲸鱼娘 v2 六档滑轨（B–G）
-   主题三：暴击展示（固定立绘 + 点击播放撞玻璃 GIF）
+   主题三：暴击展示（固定立绘 + 程序化冲击 + 连击跳字）
    纯原生实现：无依赖、无构建步骤。
    ============================================================ */
 
@@ -121,7 +121,10 @@
     display: $('display'),
     frameStack: $('frameStack'),
     emptyHint: $('emptyHint'),
-    burstGif: $('burstGif'),
+    burstHud: $('burstHud'),
+    burstLabel: $('burstLabel'),
+    burstCount: $('burstCount'),
+    burstShards: $('burstShards'),
     impact: $('impact'),
     impactFrame: $('impactFrame'),
     impactFlash: $('impactFlash'),
@@ -454,7 +457,7 @@
   function buildFrames() {
     // 只移除旧帧，保留空图提示、GIF 层与主题三的固定立绘
     Array.prototype.forEach.call(
-      els.frameStack.querySelectorAll('img:not(.burst-gif):not(.rush-figure)'),
+      els.frameStack.querySelectorAll('img:not(.rush-figure)'),
       (img) => img.remove()
     );
     frames.length = 0;
@@ -646,7 +649,7 @@
     // 撞击动画设置只服务于已隐藏的冲撞模式，三套主题都收起
     els.impactField.hidden = true;
 
-    stopBurst();
+    resetBurst();
 
     if (burst) {
       // 先退出可能残留的冲撞模式，再固定停在原图位置
@@ -728,10 +731,6 @@
   // 冲撞模式的主体立绘：固定用默认系列，不理会设置里的撞击动画选择
   const RUSH_FIGURE_SRC = 'assets/impact/new-burst/still.png';
 
-  // 主题二「暴击展示」：固定用默认系列的撞玻璃 GIF，单次播放 9 帧 × 180ms
-  const BURST_GIF_SRC = 'assets/impact/new-burst/anim.gif';
-  const BURST_GIF_MS = 1620;
-
   function buildRushFigure() {
     const img = document.createElement('img');
     img.className = 'rush-figure';
@@ -779,39 +778,146 @@
   }
 
   /* ------------------------------------------------------------
-     主题二：暴击展示（固定立绘 + 点击播放撞玻璃 GIF）
+     主题三：暴击展示（固定立绘 + 程序化冲击 + 连击）
+     素材里的 anim.gif 实测是「同一张立绘按 3×3 切块的循环」，
+     不是动作序列，做不了逐帧动画；改用静止立绘做冲击演出。
+     所有表现由同一次点击同步派发，点击与画面天然一致。
      ------------------------------------------------------------ */
 
-  let burstTimer = null;
+  const BURST_DECAY_MS = 900;
 
-  // 播放中只做视觉高亮，不改文案、不禁用：按钮始终可点，点击即从头重播
+  // 连击档位：点得越急，档位越高，冲击越快越猛
+  const BURST_TIERS = [
+    { upTo: 2, label: '砰', punch: 1.035, shake: 5, ms: 300, shards: 0, tone: 300 },
+    { upTo: 5, label: '砰砰', punch: 1.06, shake: 8, ms: 250, shards: 6, tone: 420 },
+    { upTo: 9, label: '鲸涛', punch: 1.09, shake: 12, ms: 210, shards: 12, tone: 540 },
+    { upTo: Infinity, label: '鲸祖降临', punch: 1.13, shake: 16, ms: 170, shards: 18, tone: 660 },
+  ];
+
+  const burst = { combo: 0, last: 0, decay: null };
+  let burstFadeTimer = null;
+  let burstPunchTimer = null;
+
+  function burstTierIndex(combo) {
+    for (let i = 0; i < BURST_TIERS.length; i++) {
+      if (combo <= BURST_TIERS[i].upTo) return i;
+    }
+    return BURST_TIERS.length - 1;
+  }
+
+  // 播放中只做视觉高亮，不改文案、不禁用：按钮始终可点
   function setBurstButton(firing) {
     if (!els.burstBtn) return;
     els.burstBtn.classList.toggle('is-firing', firing);
   }
 
-  function playBurst() {
-    if (theme !== 'burst') return;
-    clearTimeout(burstTimer);
-    const gif = els.burstGif;
-    gif.hidden = false;
-    // 先清空再强制回流、再设置 src，让同一张 GIF 每次都从头播放
-    gif.removeAttribute('src');
-    void gif.offsetHeight;
-    gif.src = BURST_GIF_SRC;
-    burstTimer = setTimeout(stopBurst, BURST_GIF_MS);
-
-    // 按钮本身要有明确的触发反馈，而不是只靠展示区里的 GIF
-    setBurstButton(true);
-    restartClass(els.burstBtn, 'is-firing');
-    if (navigator.vibrate) navigator.vibrate([9, 28, 12]);
+  function punchFrame(tier, intensity) {
+    if (reducedMotion.matches) return;
+    const stack = els.frameStack;
+    const ms = Math.round(tier.ms * (1 - 0.4 * intensity));
+    stack.style.setProperty('--punch', tier.punch.toFixed(3));
+    stack.style.setProperty('--punch-ms', ms + 'ms');
+    restartClass(stack, 'is-punch');
+    // 兜底：后台标签页动画被节流时 animationend 不触发
+    clearTimeout(burstPunchTimer);
+    burstPunchTimer = setTimeout(() => stack.classList.remove('is-punch'), ms + 80);
   }
 
-  function stopBurst() {
-    clearTimeout(burstTimer);
-    burstTimer = null;
-    els.burstGif.hidden = true;
-    els.burstGif.removeAttribute('src');
+  function spawnShards(count, intensity) {
+    if (!els.burstShards || reducedMotion.matches) return;
+    // 连点太快时限制活动碎片数量，避免弱机掉帧
+    while (els.burstShards.children.length > 60) {
+      els.burstShards.firstElementChild.remove();
+    }
+    for (let i = 0; i < count; i++) {
+      const shard = document.createElement('span');
+      shard.className = 'shard';
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 48 + Math.random() * 78 + intensity * 52;
+      const dur = Math.round(360 + Math.random() * 200 - intensity * 90);
+      shard.style.setProperty('--dx', (Math.cos(angle) * dist).toFixed(1) + 'px');
+      shard.style.setProperty('--dy', (Math.sin(angle) * dist).toFixed(1) + 'px');
+      shard.style.setProperty('--rot', Math.round(Math.random() * 720 - 360) + 'deg');
+      shard.style.setProperty('--size', (5 + Math.random() * 8).toFixed(1) + 'px');
+      shard.style.setProperty('--dur', dur + 'ms');
+      els.burstShards.appendChild(shard);
+      shard.addEventListener('animationend', () => shard.remove(), { once: true });
+      // 兜底：动效被系统禁用或标签页后台节流时 animationend 不触发
+      setTimeout(() => shard.remove(), dur + 260);
+    }
+  }
+
+  function bumpHud(combo, tier) {
+    els.burstHud.hidden = false;
+    els.burstLabel.textContent = tier.label;
+    els.burstCount.textContent = '×' + combo;
+    els.burstHud.classList.toggle('is-break', tier.label === '鲸祖降临');
+    els.burstHud.classList.remove('is-fade');
+    restartClass(els.burstHud, 'is-pop');
+  }
+
+  // 一次点击 = 一次撞击：缩放、震屏、闪白、裂纹、碎片、跳字、音效同一帧派发
+  function hitBurst() {
+    if (theme !== 'burst') return;
+
+    const now = performance.now();
+    const gap = burst.last ? now - burst.last : 0;
+    const chained = burst.last > 0 && gap <= BURST_DECAY_MS;
+    burst.combo = chained ? burst.combo + 1 : 1;
+    burst.last = now;
+
+    const ti = burstTierIndex(burst.combo);
+    const tier = BURST_TIERS[ti];
+    // 间隔越短力度越大；第一次点击给固定中等力度
+    const intensity = chained ? clamp01((BURST_DECAY_MS - gap) / BURST_DECAY_MS) : 0.4;
+    const strength = clamp01(0.32 + 0.5 * intensity + 0.04 * ti);
+
+    strike(strength);
+    sound.click(tier.tone);
+    punchFrame(tier, intensity);
+    spawnShards(tier.shards, intensity);
+    bumpHud(burst.combo, tier);
+
+    setBurstButton(true);
+    restartClass(els.burstBtn, 'is-firing');
+    if (navigator.vibrate) navigator.vibrate(8 + ti * 4);
+
+    clearTimeout(burst.decay);
+    burst.decay = setTimeout(resetBurstCombo, BURST_DECAY_MS);
+  }
+
+  function resetBurstCombo() {
+    burst.combo = 0;
+    burst.last = 0;
+    if (!els.burstHud) return;
+    els.burstHud.classList.remove('is-pop', 'is-break');
+    els.burstHud.classList.add('is-fade');
+    clearTimeout(burstFadeTimer);
+    burstFadeTimer = setTimeout(() => {
+      els.burstHud.hidden = true;
+      els.burstHud.classList.remove('is-fade');
+    }, 240);
+  }
+
+  // 离开主题三或重置：清掉连击与残留动画
+  function resetBurst() {
+    clearTimeout(burst.decay);
+    clearTimeout(burstFadeTimer);
+    clearTimeout(burstPunchTimer);
+    burst.combo = 0;
+    burst.last = 0;
+    burst.decay = null;
+    els.frameStack.classList.remove('is-punch');
+    els.frameStack.style.removeProperty('--punch');
+    els.frameStack.style.removeProperty('--punch-ms');
+    els.display.classList.remove('is-hit');
+    els.impactFlash.classList.remove('is-on');
+    els.impactCracks.classList.remove('is-on');
+    if (els.burstShards) els.burstShards.innerHTML = '';
+    if (els.burstHud) {
+      els.burstHud.hidden = true;
+      els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
+    }
     setBurstButton(false);
   }
 
@@ -1107,15 +1213,15 @@
       if (impact.ready) playImpact(0.4);
     });
 
-    // 主题二：暴击按钮或直接点击立绘都能触发 GIF
+    // 主题三：暴击按钮或直接点击立绘都能打一次
     els.burstBtn.addEventListener('click', () => {
       sound.ensure();
-      playBurst();
+      hitBurst();
     });
     els.display.addEventListener('click', () => {
       if (theme !== 'burst') return;
       sound.ensure();
-      playBurst();
+      hitBurst();
     });
 
     els.inputTheme.addEventListener('change', () => {
@@ -1150,6 +1256,10 @@
     // 撞击动画收尾后清掉类名，下一次撞击才能重新触发同一段动画
     els.display.addEventListener('animationend', (e) => {
       if (e.animationName === 'impact-shake') els.display.classList.remove('is-hit');
+    });
+    // 主题三的镜头冲击同理，播完摘掉类，避免动画状态一直挂着
+    els.frameStack.addEventListener('animationend', (e) => {
+      if (e.animationName === 'burst-punch') els.frameStack.classList.remove('is-punch');
     });
     els.impactFlash.addEventListener('animationend', () => {
       els.impactFlash.classList.remove('is-on');

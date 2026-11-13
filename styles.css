@@ -1254,18 +1254,128 @@ body.theme-burst .display {
   100% { transform: scale(1); }
 }
 
-/* 主题二：覆盖在固定立绘上的撞玻璃 GIF（透明背景，单次播放） */
-.burst-gif {
+/* 主题三：连击跳字（砰砰 +1 ×N） */
+.burst-hud {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center 40%;
-  z-index: 3;
+  left: 50%;
+  top: 8%;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  transform: translateX(-50%);
   pointer-events: none;
   user-select: none;
-  -webkit-user-drag: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  text-shadow:
+    0 0 14px color-mix(in srgb, var(--accent) 85%, transparent),
+    0 2px 12px rgba(0, 0, 0, 0.6);
+  transition: opacity 0.24s var(--ease);
+}
+
+.burst-hud-label {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.burst-hud-plus {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.burst-hud-count {
+  font-size: 20px;
+  font-weight: 900;
+  opacity: 0.88;
+}
+
+.burst-hud.is-pop {
+  animation: burst-hud-pop 0.22s var(--ease);
+}
+
+@keyframes burst-hud-pop {
+  0% { transform: translateX(-50%) scale(0.72); }
+  55% { transform: translateX(-50%) scale(1.12); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+.burst-hud.is-fade {
+  opacity: 0;
+}
+
+/* 斩杀档：字更大、转金色 */
+.burst-hud.is-break .burst-hud-label {
+  font-size: 34px;
+  letter-spacing: 0.1em;
+  color: #ffe083;
+  text-shadow:
+    0 0 18px rgba(255, 196, 64, 0.9),
+    0 0 42px rgba(255, 140, 60, 0.55),
+    0 2px 12px rgba(0, 0, 0, 0.65);
+}
+
+.burst-hud.is-break .burst-hud-count {
+  font-size: 24px;
+  color: #ffe083;
+}
+
+/* 主题三：碎玻璃粒子 */
+.burst-shards {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.shard {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: var(--size, 8px);
+  height: var(--size, 8px);
+  margin: calc(var(--size, 8px) / -2) 0 0 calc(var(--size, 8px) / -2);
+  background: linear-gradient(150deg, #ffffff, rgba(168, 224, 255, 0.5));
+  clip-path: polygon(50% 0, 100% 62%, 12% 100%);
+  opacity: 0;
+  animation: shard-fly var(--dur, 420ms) cubic-bezier(0.16, 0.72, 0.28, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes shard-fly {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.45); }
+  14% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 70px), var(--dy, 70px)) rotate(var(--rot, 220deg)) scale(1);
+  }
+}
+
+/* 主题三：冲击缩放（镜头撞上去），与 #display 的位移震屏叠加 */
+.frame-stack.is-punch {
+  animation: burst-punch var(--punch-ms, 260ms) cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes burst-punch {
+  0% { transform: scale(1); }
+  16% { transform: scale(var(--punch, 1.06)); }
+  58% { transform: scale(calc(1 + (var(--punch, 1.06) - 1) * 0.32)); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame-stack.is-punch,
+  .burst-hud.is-pop {
+    animation: none;
+  }
+
+  .burst-shards {
+    display: none;
+  }
 }
 
 /* ============================================================
