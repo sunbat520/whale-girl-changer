@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v6';
+const CACHE_NAME = 'whale-changer-v7';
 
 const PRECACHE = [
   './',
@@ -22,14 +22,14 @@ const PRECACHE = [
   './assets/aligned/d.jpeg',
   './assets/aligned/g.jpeg',
   './assets/aligned/h.jpeg',
-  // 主题一：v2 六档图片包
+  // 主题二：v2 六档
   './assets/b.jpeg',
   './assets/c.jpeg',
   './assets/d.jpeg',
   './assets/e.jpeg',
   './assets/f.jpeg',
   './assets/g.jpeg',
-  // 主题二：默认撞击立绘与暴击 GIF；其余九组按需缓存（见 cacheFirst）
+  // 主题三：默认撞击立绘与暴击 GIF；其余九组按需缓存（见 cacheFirst）
   './assets/impact/new-burst/still.png',
   './assets/impact/new-burst/anim.gif',
 ];

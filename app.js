@@ -1,7 +1,8 @@
 /* ============================================================
    鲸鱼娘变化器 — 交互逻辑
-   主题一（默认）：v1 鲸系浓度滑轨（经典 5 档 / v2 六档图片包）
-   主题二：暴击展示（固定立绘 + 点击播放撞玻璃 GIF）
+   主题一（默认）：v1 鲸系浓度滑轨（经典 5 档三视图）
+   主题二：鲸鱼娘 v2 六档滑轨（B–G）
+   主题三：暴击展示（固定立绘 + 点击播放撞玻璃 GIF）
    纯原生实现：无依赖、无构建步骤。
    ============================================================ */
 
@@ -14,7 +15,7 @@
 
   const STORAGE_KEY = 'whale-changer-v2:v1';
 
-  // 主题一（默认）：v1「鲸鱼娘变化器」的两套图片包
+  // 主题一（默认）：v1「鲸鱼娘变化器」的经典 5 档三视图
   const CLASSIC_GRADES = [
     { name: '小鲸鱼', desc: '刚学会吐泡泡，连尾巴都还是软的。' },
     { name: '鲸鱼娘', desc: '今天的女仆装熨得很平整。' },
@@ -32,10 +33,10 @@
     { name: 'G 鲸祖', desc: '鲸祖降临，潮汐为她让路。' },
   ];
 
-  // 图片包：每包自带帧顺序与档位文案，切换时帧数/刻度/文案一起适配。
-  const PACKS = {
+  // 两套滑轨素材：主题一 / 主题二各用一套，帧数与文案随之切换。
+  const FRAME_SETS = {
     classic: {
-      label: '经典 5 档（a/c/d/g/h）',
+      label: '经典 5 档',
       dir: 'assets/aligned/',
       sources: [
         'assets/aligned/a.jpeg',
@@ -47,7 +48,7 @@
       grades: CLASSIC_GRADES,
     },
     v2: {
-      label: '鲸鱼娘 v2 六档（B–G）',
+      label: '鲸鱼娘 v2 六档',
       dir: 'assets/',
       sources: [
         'assets/b.jpeg',
@@ -60,8 +61,8 @@
       grades: V2_GRADES,
     },
   };
-  const PACK_IDS = Object.keys(PACKS);
-  const DEFAULT_PACK = 'classic';
+  const SET_IDS = Object.keys(FRAME_SETS);
+  const DEFAULT_SET = 'classic';
 
   const DEFAULTS = {
     title: '鲸鱼娘变化器',
@@ -70,8 +71,7 @@
     sound: true,
     impactSeries: 'new-burst',
     mode: 'cup',
-    theme: 'cup', // cup = 主题一（v1 鲸系浓度滑轨），burst = 主题二（暴击展示）
-    pack: DEFAULT_PACK,
+    theme: 'classic', // classic = 主题一，v2 = 主题二，burst = 主题三（暴击展示）
   };
 
   /* 撞玻璃：来自「蓝发鲸鱼女仆 · 图片与 GIF 完整合集」的十组贴玻璃立绘原图。
@@ -92,7 +92,9 @@
 
   const hasImpactSeries = (id) => IMPACT_SERIES.some((s) => s.id === id);
   const isMode = (v) => v === 'cup' || v === 'rush';
-  const isTheme = (v) => v === 'cup' || v === 'burst';
+  const isTheme = (v) => v === 'classic' || v === 'v2' || v === 'burst';
+  // 两套滑轨主题（主题一 / 主题二）；主题三不滑轨
+  const isSlideTheme = (v) => v === 'classic' || v === 'v2';
 
   const PRESET_COLORS = [
     '#4fc3f7', // 深海青
@@ -152,8 +154,6 @@
     scrim: $('scrim'),
     inputTitle: $('inputTitle'),
     inputSubtitle: $('inputSubtitle'),
-    inputPack: $('inputPack'),
-    packField: $('packField'),
     gradeFields: $('gradeFields'),
     swatches: $('swatches'),
     inputAccent: $('inputAccent'),
@@ -165,13 +165,13 @@
      ------------------------------------------------------------ */
 
   let config = loadConfig();
-  // 主题一默认停在 50%（v1 的初始位置）；主题二固定在最右端
-  let current = config.theme === 'burst' ? 1 : 0.5;
+  // 主题一默认停在 50%（v1 初始位置）；主题二/三固定在最右端
+  let current = config.theme === 'classic' ? 0.5 : 1;
   let target = current;
   let lastIdx = -1; // 上一次生效的档位
   let booted = false;
   let mode = config.mode; // cup = 杯型变化（v2 原行为），rush = 贴脸冲撞
-  let theme = config.theme; // cup = 主题一（经典杯型），burst = 主题二（暴击展示）
+  let theme = config.theme; // classic = 主题一，v2 = 主题二，burst = 主题三（暴击展示）
   let lastRushStep = -1; // 冲撞模式上一次触发的撞击档
   let rushFullHit = false; // 满力撞击去抖：一次推到底只触发一次
   let dragging = false;
@@ -187,10 +187,10 @@
      配置读写
      ------------------------------------------------------------ */
 
-  function makeDefaultGradesByPack() {
+  function makeDefaultGradesBySet() {
     const map = {};
-    PACK_IDS.forEach((id) => {
-      map[id] = PACKS[id].grades.map((g) => ({ ...g }));
+    SET_IDS.forEach((id) => {
+      map[id] = FRAME_SETS[id].grades.map((g) => ({ ...g }));
     });
     return map;
   }
@@ -204,8 +204,7 @@
       impactSeries: DEFAULTS.impactSeries,
       mode: DEFAULTS.mode,
       theme: DEFAULTS.theme,
-      pack: DEFAULTS.pack,
-      gradesByPack: makeDefaultGradesByPack(),
+      gradesBySet: makeDefaultGradesBySet(),
     };
   }
 
@@ -225,15 +224,19 @@
       }
       if (typeof saved.sound === 'boolean') base.sound = saved.sound;
       if (isMode(saved.mode)) base.mode = saved.mode;
-      if (isTheme(saved.theme)) base.theme = saved.theme;
+      if (isTheme(saved.theme)) {
+        base.theme = saved.theme;
+      } else if (saved.theme === 'cup') {
+        // 旧版只有一个滑轨主题：按当时保存的图片包还原
+        base.theme = saved.pack === 'v2' ? 'v2' : 'classic';
+      }
       if (typeof saved.impactSeries === 'string' && hasImpactSeries(saved.impactSeries)) {
         base.impactSeries = saved.impactSeries;
       }
-      if (typeof saved.pack === 'string' && PACKS[saved.pack]) base.pack = saved.pack;
 
-      const applyGrades = (packId, list) => {
+      const applyGrades = (setId, list) => {
         if (!Array.isArray(list)) return;
-        const grades = base.gradesByPack[packId];
+        const grades = base.gradesBySet[setId];
         if (!grades) return;
         list.forEach((g, i) => {
           if (!grades[i] || !g) return;
@@ -242,10 +245,11 @@
         });
       };
 
-      if (saved.gradesByPack && typeof saved.gradesByPack === 'object') {
-        PACK_IDS.forEach((id) => applyGrades(id, saved.gradesByPack[id]));
+      const savedSets = saved.gradesBySet || saved.gradesByPack;
+      if (savedSets && typeof savedSets === 'object') {
+        SET_IDS.forEach((id) => applyGrades(id, savedSets[id]));
       }
-      // 旧版配置只有 v2 的六档 grades，迁移到 v2 图片包
+      // 更早的配置只有一套六档 grades，迁移到 v2 素材
       if (Array.isArray(saved.grades)) applyGrades('v2', saved.grades);
     } catch (err) {
       // localStorage 不可用时按默认配置运行
@@ -254,15 +258,19 @@
     return base;
   }
 
-  function activePack() {
-    return PACKS[config.pack] || PACKS[DEFAULT_PACK];
+  function activeSetId() {
+    return theme === 'v2' ? 'v2' : DEFAULT_SET;
+  }
+
+  function activeSet() {
+    return FRAME_SETS[activeSetId()];
   }
 
   function activeGrades() {
-    const id = PACKS[config.pack] ? config.pack : DEFAULT_PACK;
-    const grades = config.gradesByPack && config.gradesByPack[id];
+    const id = activeSetId();
+    const grades = config.gradesBySet && config.gradesBySet[id];
     if (Array.isArray(grades) && grades.length) return grades;
-    return PACKS[id].grades;
+    return FRAME_SETS[id].grades;
   }
 
   function saveConfig() {
@@ -429,22 +437,22 @@
   }
 
   function updateEmptyHint() {
-    const pack = activePack();
-    const names = pack.sources
+    const set = activeSet();
+    const names = set.sources
       .map((src) => src.slice(src.lastIndexOf('/') + 1))
       .join(' · ');
     els.emptyHint.innerHTML =
       '把 ' +
-      pack.sources.length +
+      set.sources.length +
       ' 张图片放进 <code>' +
-      pack.dir +
+      set.dir +
       '</code>，命名为<br><code>' +
       names +
       '</code>';
   }
 
   function buildFrames() {
-    // 只移除旧帧，保留空图提示、GIF 层与主题二的固定立绘
+    // 只移除旧帧，保留空图提示、GIF 层与主题三的固定立绘
     Array.prototype.forEach.call(
       els.frameStack.querySelectorAll('img:not(.burst-gif):not(.rush-figure)'),
       (img) => img.remove()
@@ -453,7 +461,7 @@
 
     updateEmptyHint();
 
-    const sources = activePack().sources;
+    const sources = activeSet().sources;
     N = sources.length;
     let settled = 0;
 
@@ -613,33 +621,36 @@
     saveConfig();
   }
 
-  // 主题切换：主题一 = v1 鲸系浓度滑轨，主题二 = 固定立绘 + 暴击展示
+  const THEME_EYEBROW = {
+    classic: 'WHALE‑GIRL RHEOSTAT',
+    v2: 'WHALE‑GIRL CUP DIAL',
+    burst: 'WHALE‑GIRL IMPACT',
+  };
+
+  // 主题切换：主题一/二 = 滑轨（各用一套素材），主题三 = 固定立绘 + 暴击展示
   function applyTheme(next) {
-    theme = isTheme(next) ? next : 'cup';
+    theme = isTheme(next) ? next : 'classic';
     config.theme = theme;
     const burst = theme === 'burst';
 
+    document.body.classList.toggle('theme-classic', theme === 'classic');
+    document.body.classList.toggle('theme-v2', theme === 'v2');
     document.body.classList.toggle('theme-burst', burst);
-    document.body.classList.toggle('theme-cup', !burst);
 
-    if (els.eyebrow) {
-      els.eyebrow.textContent = burst ? 'WHALE‑GIRL CUP DIAL' : 'WHALE‑GIRL RHEOSTAT';
-    }
+    if (els.eyebrow) els.eyebrow.textContent = THEME_EYEBROW[theme];
     if (els.inputTheme) els.inputTheme.value = theme;
 
-    // 杯型/冲撞切换两套主题都不展示：主题一只有滑轨，主题二用暴击按钮
+    // 杯型/冲撞切换三套主题都不展示：滑轨主题只有滑杆，主题三用暴击按钮
     els.modeTabs.hidden = true;
     els.burstBtn.hidden = !burst;
-    // 撞击动画设置只服务于已隐藏的冲撞模式，两套主题都收起
+    // 撞击动画设置只服务于已隐藏的冲撞模式，三套主题都收起
     els.impactField.hidden = true;
-    // 图片包只对主题一有效
-    els.packField.hidden = burst;
 
     stopBurst();
 
     if (burst) {
-      // 主题二不滑动：固定停在原图位置，只展示贴玻璃立绘
-      mode = 'cup';
+      // 先退出可能残留的冲撞模式，再固定停在原图位置
+      setMode('cup');
       target = 1;
       current = 1;
       els.captionLevel.textContent = '暴击';
@@ -652,9 +663,14 @@
       return;
     }
 
-    // 回到主题一：落回 v1 的初始位置（50%）
-    target = 0.5;
-    current = 0.5;
+    // 滑轨主题：按当前素材集重建帧与刻度（主题一 5 档 / 主题二 6 档）
+    buildFrames();
+    buildGradeLabels();
+    syncSettingsInputs();
+
+    // 主题一落回 v1 初始位置（50%），主题二停在最右端（G，即原图）
+    target = theme === 'classic' ? 0.5 : 1;
+    current = target;
     lastIdx = -1;
     setMode('cup');
   }
@@ -883,8 +899,11 @@
     els.inputImpact.value = config.impactSeries;
     els.inputTheme.value = config.theme;
 
-    buildGradeLabels();
-    updateGrade(Math.max(0, lastIdx), false);
+    // 主题三的档位文案固定为暴击展示，不随档位设置变化
+    if (theme !== 'burst') {
+      buildGradeLabels();
+      updateGrade(Math.max(0, lastIdx), false);
+    }
     syncSwatchActive();
   }
 
@@ -1048,7 +1067,6 @@
   function syncSettingsInputs() {
     els.inputTitle.value = config.title;
     els.inputSubtitle.value = config.subtitle;
-    els.inputPack.value = PACKS[config.pack] ? config.pack : DEFAULT_PACK;
     els.inputAccent.value = config.accent;
     els.inputImpact.value = config.impactSeries;
     els.inputTheme.value = config.theme;
@@ -1102,18 +1120,6 @@
 
     els.inputTheme.addEventListener('change', () => {
       applyTheme(els.inputTheme.value);
-    });
-
-    els.inputPack.addEventListener('change', () => {
-      config.pack = PACKS[els.inputPack.value] ? els.inputPack.value : DEFAULT_PACK;
-      buildFrames();
-      buildGradeLabels();
-      target = 0.5;
-      current = 0.5;
-      lastIdx = -1;
-      render(current);
-      syncSettingsInputs();
-      saveConfig();
     });
 
     els.soundToggle.addEventListener('click', () => {
@@ -1196,9 +1202,9 @@
       const grades = activeGrades();
       if (!grades[i]) return;
 
-      const packDefaults = PACKS[config.pack] ? PACKS[config.pack].grades : [];
+      const setDefaults = FRAME_SETS[activeSetId()] ? FRAME_SETS[activeSetId()].grades : [];
       if (field === 'name') {
-        const fallback = packDefaults[i] ? packDefaults[i].name : grades[i].name;
+        const fallback = setDefaults[i] ? setDefaults[i].name : grades[i].name;
         grades[i].name = input.value.trim() || fallback;
       } else if (field === 'desc') {
         grades[i].desc = input.value;
@@ -1211,10 +1217,8 @@
       config = defaultConfig();
       sound.setEnabled(config.sound);
       loadImpactSeries(config.impactSeries);
-      buildFrames();
-      buildGradeLabels();
       applyTheme(config.theme);
-      target = config.theme === 'burst' ? 1 : 0.5;
+      target = config.theme === 'classic' ? 0.5 : 1;
       current = target;
       kick();
       syncSettingsInputs();
@@ -1252,10 +1256,8 @@
     sound.setEnabled(config.sound);
 
     buildTicks();
-    buildFrames();
     buildRushFigure();
     buildSwatches();
-    buildGradeLabels();
     buildImpactOptions();
     loadImpactSeries(config.impactSeries);
     applyTheme(config.theme);

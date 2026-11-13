@@ -1171,7 +1171,7 @@ body.is-rush .impact-cracks {
 }
 
 /* ============================================================
-   主题切换（主题一 · 经典杯型 / 主题二 · 暴击展示）
+   主题切换（主题一 · 经典滑轨 / 主题二 · v2 六档 / 主题三 · 暴击展示）
    ============================================================ */
 
 /* hidden 属性优先于组件自身的 display */
@@ -1179,7 +1179,7 @@ body.is-rush .impact-cracks {
   display: none !important;
 }
 
-/* 主题二：隐藏滑轨，只留暴击按钮与固定立绘 */
+/* 主题三：隐藏滑轨，只留暴击按钮与固定立绘 */
 body.theme-burst .meter,
 body.theme-burst .rail-wrap,
 body.theme-burst .grade-labels {
@@ -1273,26 +1273,26 @@ body.theme-burst .display {
    经典 5 档是三视图横图，展示区 6:5 且完整显示、不裁切
    ============================================================ */
 
-body.theme-cup .display-wrap {
+body.theme-classic .display-wrap {
   width: min(560px, 74vw);
 }
 
-body.theme-cup .display {
+body.theme-classic .display {
   aspect-ratio: 6 / 5;
 }
 
-body.theme-cup .frame-stack img {
+body.theme-classic .frame-stack img {
   object-fit: contain;
 }
 
 @media (max-width: 720px) {
-  body.theme-cup .display-wrap {
+  body.theme-classic .display-wrap {
     width: min(440px, 86vw);
   }
 }
 
 @media (max-height: 620px) and (orientation: landscape) {
-  body.theme-cup .display-wrap {
+  body.theme-classic .display-wrap {
     width: min(300px, 42vw);
   }
 }
