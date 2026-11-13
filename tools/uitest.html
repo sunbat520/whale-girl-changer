@@ -64,6 +64,11 @@ async function run() {
     ok('主题一不显示神临立绘', !cardVisible());
     ok('主题一初始 50%', slider.getAttribute('aria-valuenow') === '50', slider.getAttribute('aria-valuenow'));
 
+    // 版本与自救入口：手机上确认是否吃到新构建
+    ok('设置面板有构建号', (d.getElementById('buildTag') || {}).textContent === 'v17',
+      (d.getElementById('buildTag') || {}).textContent);
+    ok('设置面板有检查更新', !!d.getElementById('checkUpdate'));
+
     sel.value = 'v2';
     sel.dispatchEvent(new w.Event('change'));
     await sleep(600);

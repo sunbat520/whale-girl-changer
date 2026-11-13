@@ -972,6 +972,20 @@ body {
   border-color: color-mix(in srgb, var(--accent) 48%, transparent);
 }
 
+.btn-ghost[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 设置面板底部：构建号（手机上用它确认是不是新版本） */
+.build-tag {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint, rgba(160, 195, 230, 0.38));
+}
+
 .scrim {
   position: fixed;
   inset: 0;

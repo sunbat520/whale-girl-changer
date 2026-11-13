@@ -109,7 +109,7 @@ whale-girl-changer/
 ├── styles.css          # 视觉与响应式（四套主题的布局差异也在这里）
 ├── app.js              # 主题切换、帧混合、逐帧推进/破壁/脱力状态机、音效、设置、SW 注册
 ├── manifest.json       # PWA 清单
-├── sw.js               # Service Worker（离线缓存，预缓存滑轨素材 + 默认神临立绘 + sets.js，其余图集按需缓存）
+├── sw.js               # Service Worker（页面代码网络优先、图片缓存优先；预缓存滑轨素材 + 5 张立绘 + sets.js）
 ├── icons/              # 应用图标 512 / 192 / 180
 ├── assets/
 │   ├── aligned/        # 主题一经典 5 档三视图（a/c/d/g/h）
@@ -122,7 +122,7 @@ whale-girl-changer/
 │   ├── align_v11.py    # 经典 5 档三视图对齐脚本
 │   ├── sync_impact.py  # 撞玻璃素材同步脚本
 │   ├── sync_actions.py # 身材/动作/破壁素材 → 图集 + sets.js（抠底、网格、帧数一次算清）
-│   ├── uitest.html     # 主题三/四无头回归（54 项 DOM 断言，跑法见文件头注释）
+│   ├── uitest.html     # 主题三/四无头回归（56 项 DOM 断言，跑法见文件头注释）
 │   └── preview/        # 生成预览（可删）
 └── README.md
 ```
@@ -135,7 +135,13 @@ whale-girl-changer/
 - **Mac（Safari）**：文件 → 添加到 Dock
 - **Mac（Chrome）**：地址栏安装图标 → 安装
 
-改了资源后，把 `sw.js` 里的 `CACHE_NAME` 改一下（如 `whale-changer-v14`），浏览器会自动清掉旧缓存。
+### 版本更新（手机刷新不动的处理）
+
+`sw.js` 对**页面代码（HTML / CSS / JS）走网络优先**：刷新一次就吃到线上最新版，断网时才回退缓存；图片等重资源仍走缓存优先。所以改代码后**不需要**手动改 `CACHE_NAME`，只改了预缓存图片时才需要。
+
+- 每次发版把 `app.js` 的 `APP_VERSION` 与 `sw.js` 的 `CACHE_NAME` 一起 +1；设置面板底部会显示「构建 vN」，手机上据此确认是否吃到新版。
+- 注册时用 `updateViaCache: 'none'`，并监听 `controllerchange` 自动刷新一次，SW 一换新页面就跟着换。
+- 万一还卡在旧版本：设置 → 「检查更新」，它会注销 SW、清空所有缓存并带一次性参数重开页面。
 
 ## 实现要点
 
@@ -146,6 +152,7 @@ whale-girl-changer/
 - **长按 2 秒 = 自动播放**：`pointerdown` 起 2 秒计时并显示蓄力进度条，到点把按钮转成红底玻璃、主标签变「取消」，每 110ms 推进一帧；松手不停，点一下按钮（或点立绘）才结束循环并停在当前帧。循环只推进画面，不累计连击、不脱力。播放中切换动作/身材不会中断循环，每个「身材:动作」在 `autoPos` 里各记一份进度，切回来接着播；长按松手后浏览器补发的 click 用 `suppressClick` 吃掉，避免刚开的循环被自己取消
 - **破壁随机**：三支图集 130ms/帧放完停末帧，副标题报 `破壁 · 难度 N`；`pickBurstBreak()` 等概率抽签但排除上一支，`breakToken` 负责作废还没加载/没播完的旧播放，`loadBurstSheet()` 首次点击先等解码
 - **数据驱动**：帧数 / 网格 / 宽高比全部来自 `assets/burst/sets.js`（`tools/sync_actions.py` 生成），`paintSheetFrame()` 按 `set.cols`、`set.rows` 算 `background-position`，换网格不用改 JS；新增素材只需改脚本顶部的 `BODIES` / `ACTIONS` / `BREAKS` 再重跑
+- **版本自救**：`registerServiceWorker()` 用 `updateViaCache:'none'` 注册、`visibilitychange` 时主动 `reg.update()`、`controllerchange` 后自动 `location.reload()`；设置面板的「检查更新」注销 SW + 清空 CacheStorage 后带 `?v=<时间戳>` 重开，专门治手机上「刷新不动」
 - **档位显示在按钮上**：档位与连击数（砰 / 砰砰 / 鲸涛 / 脱力）写进「神临」按钮的副标题（`setBurstReadout()`），不再浮在人物身上挡脸；自动连播时改报「自动连播 · ×N」
 - **脱力只看手动连击**：手动连击到 30 触发 `startExhaust()`，自动放完当前身材的摔倒序列并停在末帧，再点一次 `reviveBurst()` 回到神临立绘。`burst.exhaustPlaying` 在播放期间为真，此时点击直接忽略，避免连点把脱力点穿
 - **音效**：Web Audio API 实时合成——摩擦声（带通白噪声）、咔哒声（三角波），不加载任何音频文件

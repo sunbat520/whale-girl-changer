@@ -15,6 +15,8 @@
      ------------------------------------------------------------ */
 
   const STORAGE_KEY = 'whale-changer-v2:v1';
+  // 构建号：和 sw.js 的 CACHE_NAME 同步递增，方便在手机上确认是否吃到新版本
+  const APP_VERSION = 'v17';
 
   // 主题一（默认）：v1「鲸鱼娘变化器」的经典 5 档三视图
   const CLASSIC_GRADES = [
@@ -1974,6 +1976,9 @@
      ------------------------------------------------------------ */
 
   function registerServiceWorker() {
+    showBuildTag();
+    bindForceRefresh();
+
     if (!('serviceWorker' in navigator)) return;
 
     const host = location.hostname;
@@ -1982,10 +1987,63 @@
     // Service Worker 只在 HTTPS 或 localhost 下可用
     if (location.protocol !== 'https:' && !isLocalhost) return;
 
+    // 首次访问没有 controller：那时换新不该刷新页面，否则会白屏闪一下
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {
-        // 注册失败（隐私模式、被禁用等）不影响正常运行
-      });
+      // updateViaCache:'none' 让浏览器每次真的去问线上 sw.js，
+      // 不吃 GitHub Pages 的 10 分钟 HTTP 缓存
+      navigator.serviceWorker
+        .register('sw.js', { updateViaCache: 'none' })
+        .then((reg) => {
+          reg.update().catch(() => undefined);
+          // 手机从后台切回来时再问一次，不用等下一次冷启动
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => undefined);
+          });
+        })
+        .catch(() => {
+          // 注册失败（隐私模式、被禁用等）不影响正常运行
+        });
+    });
+  }
+
+  function showBuildTag() {
+    const tag = document.getElementById('buildTag');
+    if (tag) tag.textContent = APP_VERSION;
+    document.documentElement.dataset.build = APP_VERSION;
+  }
+
+  // 「检查更新」：注销 SW + 清空所有缓存，带一次性参数重开页面。
+  // 手机上刷新不动时（旧 SW 一直喂旧缓存）这是唯一可靠的自救按钮。
+  function bindForceRefresh() {
+    const btn = document.getElementById('checkUpdate');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const label = btn.textContent;
+      btn.textContent = '清理中…';
+      btn.disabled = true;
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((reg) => reg.unregister()));
+        }
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      } catch (err) {
+        /* 清不掉也继续重开，最坏就是还走旧缓存 */
+      }
+      const url = new URL(location.href);
+      url.searchParams.set('v', Date.now().toString(36));
+      location.replace(url.toString());
+      btn.textContent = label;
+      btn.disabled = false;
     });
   }
 
