@@ -147,31 +147,52 @@ async function run() {
     tap().click();
     await sleep(150);
 
-    // 长按 2 秒：自动连播，越播越久也不脱力
+    const posOf = () => frame().style.getPropertyValue('--bx') + '/' + frame().style.getPropertyValue('--by');
+
+    // 长按 2 秒：进入持续自动播放（松手不停）
     pointer(w, tap(), 'pointerdown');
     await sleep(600);
-    ok('0.6 秒时还没开始自动播放', !tap().classList.contains('is-holding'));
+    ok('0.6 秒时还没开始自动播放', !tap().classList.contains('is-autoplay'));
     ok('长按中显示蓄力', tap().classList.contains('is-arming'));
     await sleep(1600);
-    ok('2 秒后进入自动播放', tap().classList.contains('is-holding'));
-    ok('长按切到连招', $('#burstActions .is-active').dataset.action === 'combo');
-    await sleep(700);
-    const c1 = tapSub().textContent;
-    await sleep(700);
-    const c2 = tapSub().textContent;
-    ok('连招在自动推进', c1 !== c2, c1 + ' → ' + c2);
-    // 再播 4 秒（约 36 帧，超过 30）也不该脱力
-    await sleep(4000);
-    ok('自动连播不脱力', !/脱力/.test(tapSub().textContent) && !/脱力/.test(d.getElementById('captionName').textContent), tapSub().textContent);
+    ok('2 秒后进入自动播放', tap().classList.contains('is-autoplay'));
+    ok('按钮主标签变取消', tap().querySelector('.burst-tap-main').textContent === '取消');
+    ok('自动播放收起长按提示',
+      w.getComputedStyle(tap().querySelector('.burst-tap-hint')).display === 'none');
+    ok('自动播当前动作', $('#burstActions .is-active').dataset.action === 'wave');
     pointer(w, tap(), 'pointerup');
-    await sleep(400);
-    const c3 = tapSub().textContent;
+    tap().click(); // 系统在松手后补发的 click，被 suppressClick 吃掉
+    await sleep(500);
+    const c1 = tapSub().textContent;
     await sleep(600);
-    ok('松手后停止', c3 === tapSub().textContent, c3);
+    ok('松手后仍在自动播放', c1 !== tapSub().textContent && tap().classList.contains('is-autoplay'), c1 + ' → ' + tapSub().textContent);
+
+    // 自动播放中可以切换任意动作 / 身材组合
+    actions()[0].click();
+    await sleep(250);
+    ok('自动播放中切动作', sheetName() === 'e-walk' && tap().classList.contains('is-autoplay'), sheetName());
+    bodies()[0].click();
+    await sleep(250);
+    ok('自动播放中切身材', sheetName() === 'a-walk' && tap().classList.contains('is-autoplay'), sheetName());
+    const p1 = posOf();
+    await sleep(400);
+    ok('切换后继续自动推进', p1 !== posOf(), p1 + ' → ' + posOf());
+
+    // 播到 30 帧以上也不脱力：自动播放不累计连击
+    await sleep(3500);
+    ok('自动播放不脱力', !/脱力/.test(tapSub().textContent), tapSub().textContent);
+    ok('自动播放字幕报帧号', /自动播放 · 走路 · \d+\/16/.test(tapSub().textContent), tapSub().textContent);
+
+    // 点一下结束循环，停在当前帧
+    tap().click();
+    await sleep(200);
+    ok('点一下结束自动播放', !tap().classList.contains('is-autoplay'));
+    ok('按钮恢复神临', tap().querySelector('.burst-tap-main').textContent === '神临');
+    const stopped = posOf();
+    await sleep(600);
+    ok('取消后停在当前帧', stopped === posOf(), stopped);
 
     // 单次连击：30 下触发脱力
-    tap().click(); // 吃掉长按松手补发的 click
-    await sleep(80);
     actions()[0].click();
     await sleep(150);
     for (let i = 0; i < 30; i++) {
@@ -180,7 +201,7 @@ async function run() {
     }
     await sleep(1800);
     ok('单次连击 30 触发脱力', /脱力/.test(tapSub().textContent), tapSub().textContent);
-    ok('脱力停在摔倒末帧', sheetName() === 'e-fall', sheetName());
+    ok('脱力停在摔倒末帧', sheetName() === 'a-fall', sheetName());
     tap().click();
     await sleep(200);
     ok('点一下复活回神临', stack().classList.contains('is-shenlin'), tapSub().textContent);

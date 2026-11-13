@@ -1388,7 +1388,7 @@ body.theme-burst .display {
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* 长按提示：5 秒很长，给一条走完才自动播放的进度条 */
+/* 长按提示：2 秒蓄力，给一条走完才自动播放的进度条 */
 .burst-tap-hint {
   position: relative;
   padding-bottom: 3px;
@@ -1446,23 +1446,39 @@ body.theme-burst .display {
   transform: scale(0.96);
 }
 
+/* 自动播放中：红底玻璃，主标签变「取消」，长按提示收起 */
+.burst-btn.is-autoplay {
+  border-color: rgba(255, 108, 108, 0.55);
+  background:
+    linear-gradient(135deg, rgba(255, 82, 82, 0.34), rgba(255, 132, 96, 0.12)),
+    rgba(255, 70, 70, 0.08);
+  box-shadow:
+    0 12px 34px -14px rgba(255, 72, 72, 0.62),
+    inset 0 1px 0 rgba(255, 226, 226, 0.24);
+}
+
+.burst-btn.is-autoplay:hover {
+  box-shadow:
+    0 14px 36px -14px rgba(255, 72, 72, 0.72),
+    inset 0 1px 0 rgba(255, 226, 226, 0.28);
+}
+
+.burst-btn.is-autoplay .burst-tap-main {
+  color: #ffe2e2;
+  letter-spacing: 0.24em;
+}
+
+.burst-btn.is-autoplay .burst-tap-sub {
+  color: rgba(255, 214, 214, 0.86);
+}
+
+.burst-btn.is-autoplay .burst-tap-hint {
+  display: none;
+}
+
 .burst-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-}
-
-/* 正在自动循环：整块亮起来，提示手还按着 */
-.burst-btn.is-holding {
-  transform: scale(0.97);
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 42%, transparent),
-    0 0 30px color-mix(in srgb, var(--accent) 70%, transparent);
-}
-
-.burst-btn.is-holding .burst-tap-hint {
-  color: var(--accent);
 }
 
 /* 播放中：按钮持续高亮 + 脉冲，让点击反馈不只发生在展示区 */

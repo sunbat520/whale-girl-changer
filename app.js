@@ -692,7 +692,7 @@
       current = 1;
       els.captionLevel.textContent = '暴击';
       els.captionName.textContent = '暴击展示';
-      els.captionDesc.textContent = '点「神临」推进一帧；按住 2 秒自动播连招，连击到 30 脱力。';
+      els.captionDesc.textContent = '点「神临」推进一帧；按住 2 秒循环播当前动作，点「取消」停。连击到 30 脱力。';
       els.slider.setAttribute('aria-valuetext', '暴击展示');
       lastIdx = -1;
       render(current);
@@ -843,13 +843,13 @@
        神临     当前身材的静止立绘；点一下进入当前动作的第 0 帧
        破壁     A–E 共用同一支「突破次元」图集，点一次自动放到末帧
 
-     点「神临」推进一帧，按住 2 秒自动播放连招；连击到 30 判定脱力，
+     点「神临」推进一帧，按住 2 秒循环播放当前动作（可随时切动作/身材，点「取消」停）；连击到 30 判定脱力，
      自动放完当前身材的摔倒序列后停住，再点一下回到神临立绘。
      ------------------------------------------------------------ */
 
   const BURST_EXHAUST_AT = 30;
   const BURST_HOLD_DELAY = 2000; // 按住这么久才进入自动播放
-  const BURST_HOLD_INTERVAL = 110;
+  const BURST_AUTO_INTERVAL = 110; // 自动播放每帧间隔
   const BURST_BREAK_INTERVAL = 130;
 
   // 资产表由 tools/sync_actions.py 生成为 window.BURST_BODIES / BURST_SETS / BURST_BREAKS
@@ -895,9 +895,11 @@
     autoTimer: null,
     btnTimer: null,
     holdTimer: null,
-    holdRepeat: null,
     holdFired: false,
     suppressClick: false,
+    autoPlaying: false,
+    autoPlayTimer: null,
+    autoPos: new Map(), // 自动播放时每个「身材:动作」各自记进度，互不干扰
   };
 
   const wrapIndex = (i, n) => ((i % n) + n) % n;
@@ -1018,26 +1020,37 @@
   function setBurstReadout() {
     if (!els.burstTapSub) return;
     const tier = burstTier(burst.hits);
+    const auto = burst.autoPlaying;
     let text;
-    if (burst.view === 'break') {
+    if (auto) {
+      const set = currentBurstSet();
+      const total = set && set.total ? set.total : 0;
+      const name = BURST_ACTION_LABELS[burst.action] || burst.action;
+      const frame = total ? (wrapIndex(burst.count, total) + 1) + '/' + total : String(burst.count);
+      text = '自动播放 · ' + name + ' · ' + frame;
+    } else if (burst.view === 'break') {
       const level = burst.breakSet ? burst.breakSet.difficulty : 1;
       text = '破壁 · 难度 ' + level;
     } else if (burst.exhausted) {
       text = '脱力 · 点一下复活';
     } else if (burst.view !== 'sheet') {
       text = '神临';
-    } else if (burst.holdRepeat) {
-      // 自动连播不累计连击，也不脱力，只报当前帧号
-      text = '自动连播 · ×' + burst.count;
     } else if (burst.hits <= 0) {
       text = tier.label;
     } else {
       text = tier.label + ' · ×' + burst.hits;
     }
     els.burstTapSub.textContent = text;
+
+    // 自动播放中：按钮转红底玻璃色、主标签变「取消」，提示文案收起
+    els.burstTap.classList.toggle('is-autoplay', auto);
+    const main = els.burstTap.querySelector('.burst-tap-main');
+    if (main) main.textContent = auto ? '取消' : '神临';
+    els.burstTap.setAttribute('aria-label', auto ? '取消自动播放' : '神临');
+
     els.burstTap.classList.toggle(
       'is-break',
-      burst.exhausted || (!burst.holdRepeat && tier.label === '鲸涛')
+      !auto && (burst.exhausted || tier.label === '鲸涛')
     );
     restartClass(els.burstTapSub, 'is-pop');
   }
@@ -1058,6 +1071,7 @@
     burst.exhausted = true;
     burst.exhaustPlaying = true;
     burst.hits = BURST_EXHAUST_AT;
+    stopBurstAuto(true);
     stopBurstHold();
     cancelBurstBreak();
     clearTimeout(burst.autoTimer);
@@ -1091,6 +1105,7 @@
 
   // 脱力后点一下：回到神临立绘，连击归零
   function reviveBurst() {
+    stopBurstAuto(true);
     burst.exhausted = false;
     burst.exhaustPlaying = false;
     clearTimeout(burst.autoTimer);
@@ -1103,10 +1118,16 @@
     sound.click(420);
   }
 
-  // 一次点击 = 推进一帧，没有其它自动动画
+  // 一次点击 = 推进一帧；自动播放期间点一下 = 取消循环
   function hitBurst(opts) {
     if (theme !== 'burst') return;
-    const quiet = !!(opts && opts.quiet); // quiet = 长按自动连播，不累计连击
+    const quiet = !!(opts && opts.quiet); // quiet = 自动播放推进，不累计连击
+
+    // 自动播放中：手动点击只结束循环，停在当前帧，不再多走一帧
+    if (burst.autoPlaying && !quiet) {
+      stopBurstAuto();
+      return;
+    }
 
     // 破壁是一次性播放，播完停在末帧；播放中点击不打断
     if (burst.breakPlaying) return;
@@ -1229,6 +1250,7 @@
   function playBreak() {
     if (theme !== 'burst' || !BURST_BREAKS.length || burst.breakPlaying) return;
     sound.ensure();
+    stopBurstAuto(true);
     stopBurstHold();
     clearTimeout(burst.autoTimer);
     burst.autoTimer = null;
@@ -1258,11 +1280,66 @@
     });
   }
 
-  /* --- 长按：按住「神临」2 秒后自动播放连招 --- */
+  /* --- 长按：按住「神临」2 秒开始自动播放；循环期间再点一下取消 --- */
+
+  // 每个「身材:动作」各记一份播放进度，切来切去互不干扰
+  function burstAutoKey(action, bodyId) {
+    return (bodyId || burst.bodyId) + ':' + (action || burst.action);
+  }
+
+  function saveBurstAutoPos() {
+    burst.autoPos.set(burstAutoKey(), burst.count);
+  }
+
+  function startBurstAuto() {
+    if (theme !== 'burst' || burst.autoPlaying) return;
+    burst.autoPlaying = true;
+    burst.exhausted = false;
+    burst.exhaustPlaying = false;
+    burst.hits = 0;
+    burst.view = 'sheet';
+    cancelBurstBreak();
+    preloadBurstBody(burst.bodyId);
+    // 这个动作上次播到哪就从哪继续；第一次从第 0 帧开始
+    burst.count = burst.autoPos.get(burstAutoKey()) || 0;
+    syncBurstControls();
+    paintBurstFrame();
+    setBurstReadout();
+    sound.ensure();
+    sound.click(460);
+    if (navigator.vibrate) navigator.vibrate([10, 34, 10]);
+    clearInterval(burst.autoPlayTimer);
+    burst.autoPlayTimer = setInterval(tickBurstAuto, BURST_AUTO_INTERVAL);
+  }
+
+  // 自动播放只推进画面，不累计连击、不脱力
+  function tickBurstAuto() {
+    if (!burst.autoPlaying || theme !== 'burst') {
+      stopBurstAuto();
+      return;
+    }
+    if (burst.exhausted || burst.exhaustPlaying || burst.breakPlaying) return;
+    burst.count += 1;
+    saveBurstAutoPos();
+    paintBurstFrame();
+    setBurstReadout();
+  }
+
+  // 用户点一下「取消」、或切破壁/脱力/切主题时结束循环
+  function stopBurstAuto(quiet) {
+    if (!burst.autoPlaying) return;
+    burst.autoPlaying = false;
+    clearInterval(burst.autoPlayTimer);
+    burst.autoPlayTimer = null;
+    saveBurstAutoPos();
+    if (!quiet) sound.click(300);
+    setBurstReadout();
+  }
 
   function startBurstHold(event) {
     if (theme !== 'burst') return;
-    if (burst.holdTimer || burst.holdRepeat) return;
+    // 自动播放中：点按只负责取消，不再蓄力
+    if (burst.autoPlaying || burst.holdTimer) return;
     sound.ensure();
 
     if (event && event.pointerId !== undefined && els.burstTap.setPointerCapture) {
@@ -1280,41 +1357,23 @@
     // 2 秒到点才开始自动播放，中途松手等同于一次普通点击
     burst.holdTimer = setTimeout(() => {
       burst.holdTimer = null;
-      if (theme !== 'burst' || burst.exhausted || burst.breakPlaying) return;
+      if (theme !== 'burst' || burst.exhausted || burst.breakPlaying || burst.autoPlaying) return;
       burst.holdFired = true;
       burst.suppressClick = true;
-      els.burstTap.classList.add('is-holding');
-
-      // 长按固定播连招：先把当前动作切成连招第 0 帧
-      burst.action = 'combo';
-      burst.view = 'sheet';
-      burst.count = 0;
-      syncBurstControls();
-      paintBurstFrame();
-      setBurstReadout();
-
-      burst.holdRepeat = setInterval(() => {
-        if (theme !== 'burst' || burst.exhausted || burst.exhaustPlaying) {
-          stopBurstHold();
-          return;
-        }
-        hitBurst({ quiet: true });
-      }, BURST_HOLD_INTERVAL);
+      els.burstTap.classList.remove('is-arming');
+      startBurstAuto();
     }, BURST_HOLD_DELAY);
   }
 
   function stopBurstHold() {
     clearTimeout(burst.holdTimer);
-    clearInterval(burst.holdRepeat);
     burst.holdTimer = null;
-    burst.holdRepeat = null;
-    // 长按结束后浏览器还会补一个 click，这里吃掉，避免多走一帧
+    // 长按结束后浏览器还会补一个 click，这里吃掉，避免刚开的自动播放被自己取消
     if (burst.holdFired) {
       burst.suppressClick = true;
       burst.holdFired = false;
     }
     if (els.burstTap) {
-      els.burstTap.classList.remove('is-holding');
       els.burstTap.classList.remove('is-arming');
     }
   }
@@ -1372,9 +1431,11 @@
     }
   }
 
-  // 选中某个动作：重置帧号并立刻给第 0 帧，避免停在 baseline 上看不出差别
+  // 选中某个动作：重置帧号并立刻给第 0 帧；自动播放中则继承该动作自己的进度
   function selectBurstAction(action) {
     if (!action) return;
+    const wasAuto = burst.autoPlaying;
+    if (wasAuto) saveBurstAutoPos();
     stopBurstHold();
     clearTimeout(burst.autoTimer);
     burst.autoTimer = null;
@@ -1383,7 +1444,7 @@
     cancelBurstBreak();
     burst.action = action;
     burst.view = 'sheet';
-    burst.count = 0;
+    burst.count = wasAuto ? burst.autoPos.get(burstAutoKey(action)) || 0 : 0;
     burst.hits = 0;
     preloadBurstBody(burst.bodyId);
     syncBurstControls();
@@ -1395,6 +1456,8 @@
   function selectBurstBody(bodyId) {
     const body = BURST_BODIES.find((b) => b.id === bodyId);
     if (!body) return;
+    const wasAuto = burst.autoPlaying;
+    if (wasAuto) saveBurstAutoPos();
     stopBurstHold();
     clearTimeout(burst.autoTimer);
     burst.autoTimer = null;
@@ -1402,12 +1465,12 @@
     burst.exhaustPlaying = false;
     cancelBurstBreak();
     burst.bodyId = body.id;
-    burst.count = 0;
     burst.hits = 0;
     if (els.cardFigure && els.cardFigure.getAttribute('src') !== body.card) {
       els.cardFigure.src = body.card;
     }
     if (!burstSetOf(body.id, burst.action)) burst.action = BURST_DEFAULT_ACTION;
+    burst.count = wasAuto ? burst.autoPos.get(burstAutoKey()) || 0 : 0;
     if (burst.view === 'break') burst.view = 'shenlin';
     if (burst.view === 'sheet') preloadBurstBody(body.id);
     syncBurstControls();
@@ -1417,6 +1480,8 @@
 
   // 离开主题三或重置：清掉连击、帧态与残留类，回到默认身材的神临立绘
   function resetBurst() {
+    stopBurstAuto(true);
+    burst.autoPos.clear();
     stopBurstHold();
     clearTimeout(burst.autoTimer);
     clearTimeout(burst.btnTimer);
@@ -1445,7 +1510,10 @@
     els.impactCracks.classList.remove('is-on');
     if (els.burstFrame) els.burstFrame.classList.remove('is-square');
     if (els.burstTap) {
-      els.burstTap.classList.remove('is-break', 'is-firing', 'is-holding', 'is-arming');
+      els.burstTap.classList.remove('is-break', 'is-firing', 'is-arming', 'is-autoplay');
+      const main = els.burstTap.querySelector('.burst-tap-main');
+      if (main) main.textContent = '神临';
+      els.burstTap.setAttribute('aria-label', '神临');
     }
     if (els.burstBreak) els.burstBreak.classList.remove('is-firing');
     syncBurstControls();
@@ -1747,7 +1815,7 @@
       if (impact.ready) playImpact(0.4);
     });
 
-    // 主题三：点「神临」或直接点立绘推进一帧；按住「神临」2 秒自动播放连招
+    // 主题三：点「神临」或直接点立绘推进一帧；按住「神临」2 秒进入自动播放
     els.burstTap.addEventListener('click', () => {
       // 长按松手后浏览器还会补一个 click，这里吃掉，避免多走一帧
       if (burst.suppressClick) {
