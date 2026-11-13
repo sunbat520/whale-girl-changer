@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v14';
+const CACHE_NAME = 'whale-changer-v15';
 
 const PRECACHE = [
   './',
@@ -30,11 +30,16 @@ const PRECACHE = [
   './assets/e.jpeg',
   './assets/f.jpeg',
   './assets/g.jpeg',
-  // 主题三：神临立绘的默认身材（A）；其余身材与动作图集按需缓存（cacheFirst）
+  // 主题三：五档身材滑轨直接用这 5 张立绘（首屏全要）
+  // 主题四：神临立绘同样用它们；动作图集按需缓存（cacheFirst）
   './assets/burst/body-a.webp',
+  './assets/burst/body-b.webp',
+  './assets/burst/body-c.webp',
+  './assets/burst/body-d.webp',
+  './assets/burst/body-e.webp',
   // 冲撞模式的主体立绘（模式入口当前隐藏，但启动时会预载）
   './assets/impact/new-burst/still.png',
-  // 主题三动作图集（assets/burst/*.webp，25 张约 13MB）不预缓存：
+  // 主题四动作图集（assets/burst/*.webp，25 张约 13MB）不预缓存：
   // 神临态用不到它们，首次点选某个动作时由 cacheFirst 落盘，
   // 否则手机首屏要多下十几 MB 才出画面。
 ];

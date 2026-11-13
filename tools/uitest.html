@@ -1,7 +1,8 @@
 <!doctype html>
 <html><meta charset="utf-8"><title>uitest</title>
 <!--
-  主题三回归脚本（无头 Chrome 跑，不参与线上资源）。
+  主题三（五档身材滑轨）与主题四（暴击展示）回归脚本，
+  无头 Chrome 跑，不参与线上资源。
 
     cd whale-girl-changer
     python3 -m http.server 8765
@@ -51,6 +52,37 @@ async function run() {
 
   try {
     const sel = d.getElementById('inputTheme');
+    const slider = d.getElementById('slider');
+    const slideFrames = () =>
+      $$('#frameStack img').filter(
+        (img) => !img.classList.contains('rush-figure') && !img.classList.contains('burst-card-figure')
+      );
+    const cardVisible = () => w.getComputedStyle(card()).display !== 'none';
+
+    // 主题一 / 二 / 三：神临立绘必须完全隐藏，否则会盖住滑轨帧
+    ok('主题一默认 5 帧', slideFrames().length === 5, String(slideFrames().length));
+    ok('主题一不显示神临立绘', !cardVisible());
+    ok('主题一初始 50%', slider.getAttribute('aria-valuenow') === '50', slider.getAttribute('aria-valuenow'));
+
+    sel.value = 'v2';
+    sel.dispatchEvent(new w.Event('change'));
+    await sleep(600);
+    ok('主题二 6 帧', slideFrames().length === 6, String(slideFrames().length));
+    ok('主题二不显示神临立绘', !cardVisible());
+    ok('主题二初始 100%', slider.getAttribute('aria-valuenow') === '100', slider.getAttribute('aria-valuenow'));
+
+    // 主题三：沿用主题一逻辑，素材换成 A–E 立绘
+    sel.value = 'gemini';
+    sel.dispatchEvent(new w.Event('change'));
+    await sleep(800);
+    const geminiSrcs = slideFrames().map((img) => (img.getAttribute('src') || '').split('/').pop());
+    ok('主题三 5 帧', slideFrames().length === 5, geminiSrcs.join(','));
+    ok('主题三用 A–E 立绘', geminiSrcs.join(',') === 'body-a.webp,body-b.webp,body-c.webp,body-d.webp,body-e.webp');
+    ok('主题三不显示神临立绘', !cardVisible());
+    ok('主题三初始 50%', slider.getAttribute('aria-valuenow') === '50', slider.getAttribute('aria-valuenow'));
+    ok('主题三档位 5 个', d.querySelectorAll('#gradeLabels .grade-label').length === 5,
+      Array.from(d.querySelectorAll('#gradeLabels .grade-label')).map((e) => e.textContent).join('/'));
+
     sel.value = 'burst';
     sel.dispatchEvent(new w.Event('change'));
     await sleep(600);
@@ -59,7 +91,7 @@ async function run() {
     ok('身材行 5 个', bodies().length === 5, bodies().map((b) => b.textContent).join('/'));
     ok('默认神临立绘', stack().classList.contains('is-shenlin') && card().getAttribute('src').includes('body-a.webp'));
     ok('按钮文案', tap().querySelector('.burst-tap-main').textContent === '神临');
-    ok('长按提示', tap().textContent.includes('长按 5 秒自动播放'));
+    ok('长按提示', tap().textContent.includes('长按 2 秒自动播放'));
     ok('破壁副标题', brk().querySelector('.burst-break-sub').textContent === '突破次元');
     ok('默认动作高亮连招', $('#burstActions .is-active').dataset.action === 'combo');
 
@@ -115,21 +147,21 @@ async function run() {
     tap().click();
     await sleep(150);
 
-    // 长按 5 秒：自动连播，越播越久也不脱力
+    // 长按 2 秒：自动连播，越播越久也不脱力
     pointer(w, tap(), 'pointerdown');
-    await sleep(1000);
-    ok('1 秒时还没开始自动播放', !tap().classList.contains('is-holding'));
+    await sleep(600);
+    ok('0.6 秒时还没开始自动播放', !tap().classList.contains('is-holding'));
     ok('长按中显示蓄力', tap().classList.contains('is-arming'));
-    await sleep(4600);
-    ok('5 秒后进入自动播放', tap().classList.contains('is-holding'));
+    await sleep(1600);
+    ok('2 秒后进入自动播放', tap().classList.contains('is-holding'));
     ok('长按切到连招', $('#burstActions .is-active').dataset.action === 'combo');
     await sleep(700);
     const c1 = tapSub().textContent;
     await sleep(700);
     const c2 = tapSub().textContent;
     ok('连招在自动推进', c1 !== c2, c1 + ' → ' + c2);
-    // 再播 5 秒（约 45 帧，远超 30）也不该脱力
-    await sleep(5000);
+    // 再播 4 秒（约 36 帧，超过 30）也不该脱力
+    await sleep(4000);
     ok('自动连播不脱力', !/脱力/.test(tapSub().textContent) && !/脱力/.test(d.getElementById('captionName').textContent), tapSub().textContent);
     pointer(w, tap(), 'pointerup');
     await sleep(400);
@@ -161,7 +193,7 @@ async function run() {
     sel.value = 'burst';
     sel.dispatchEvent(new w.Event('change'));
     await sleep(600);
-    ok('回主题三默认神临', stack().classList.contains('is-shenlin') && $('#burstBodies .is-active').dataset.body === 'a');
+    ok('回主题四默认神临', stack().classList.contains('is-shenlin') && $('#burstBodies .is-active').dataset.body === 'a');
     ok('无 JS 报错', errors.length === 0, errors.join(' | '));
   } catch (err) {
     log.push('EXCEPTION ' + err.message + '\n' + err.stack);

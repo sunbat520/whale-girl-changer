@@ -2,7 +2,8 @@
    鲸鱼娘变化器 — 交互逻辑
    主题一（默认）：v1 鲸系浓度滑轨（经典 5 档三视图）
    主题二：鲸鱼娘 v2 六档滑轨（B–G）
-   主题三：暴击展示（固定立绘 + 程序化冲击 + 连击跳字）
+   主题三：五档身材滑轨（Gemini A–E，沿用主题一的滑轨逻辑）
+   主题四：暴击展示（固定立绘 + 逐帧推进 + 破壁）
    纯原生实现：无依赖、无构建步骤。
    ============================================================ */
 
@@ -33,6 +34,15 @@
     { name: 'G 鲸祖', desc: '鲸祖降临，潮汐为她让路。' },
   ];
 
+  // 主题三：5 种身材 A–E，沿用主题一的滑轨逻辑，只换素材
+  const GEMINI_GRADES = [
+    { name: 'A 型', desc: '五档里最轻盈的一版。' },
+    { name: 'B 型', desc: '比 A 型再丰一点。' },
+    { name: 'C 型', desc: '中间档，裙摆撑起自然的弧度。' },
+    { name: 'D 型', desc: '比 C 型更饱满。' },
+    { name: 'E 型', desc: '五档里最丰盈的一版。' },
+  ];
+
   // 两套滑轨素材：主题一 / 主题二各用一套，帧数与文案随之切换。
   const FRAME_SETS = {
     classic: {
@@ -60,6 +70,19 @@
       ],
       grades: V2_GRADES,
     },
+    // 主题三：沿用主题一的滑轨逻辑（5 档、交叉淡入淡出），素材换成 Gemini A–E 立绘
+    gemini: {
+      label: '五档身材 A–E',
+      dir: 'assets/burst/',
+      sources: [
+        'assets/burst/body-a.webp',
+        'assets/burst/body-b.webp',
+        'assets/burst/body-c.webp',
+        'assets/burst/body-d.webp',
+        'assets/burst/body-e.webp',
+      ],
+      grades: GEMINI_GRADES,
+    },
   };
   const SET_IDS = Object.keys(FRAME_SETS);
   const DEFAULT_SET = 'classic';
@@ -71,7 +94,7 @@
     sound: true,
     impactSeries: 'new-burst',
     mode: 'cup',
-    theme: 'classic', // classic = 主题一，v2 = 主题二，burst = 主题三（暴击展示）
+    theme: 'classic', // classic = 主题一，v2 = 主题二，gemini = 主题三（五档身材），burst = 主题四（暴击展示）
   };
 
   /* 撞玻璃：来自「蓝发鲸鱼女仆 · 图片与 GIF 完整合集」的十组贴玻璃立绘原图。
@@ -92,9 +115,9 @@
 
   const hasImpactSeries = (id) => IMPACT_SERIES.some((s) => s.id === id);
   const isMode = (v) => v === 'cup' || v === 'rush';
-  const isTheme = (v) => v === 'classic' || v === 'v2' || v === 'burst';
-  // 两套滑轨主题（主题一 / 主题二）；主题三不滑轨
-  const isSlideTheme = (v) => v === 'classic' || v === 'v2';
+  const isTheme = (v) => v === 'classic' || v === 'v2' || v === 'gemini' || v === 'burst';
+  // 三套滑轨主题（主题一 / 二 / 三）；主题四不滑轨
+  const isSlideTheme = (v) => v === 'classic' || v === 'v2' || v === 'gemini';
 
   const PRESET_COLORS = [
     '#4fc3f7', // 深海青
@@ -171,8 +194,8 @@
      ------------------------------------------------------------ */
 
   let config = loadConfig();
-  // 主题一默认停在 50%（v1 初始位置）；主题二/三固定在最右端
-  let current = config.theme === 'classic' ? 0.5 : 1;
+  // 主题一/三默认停在 50%（v1 初始位置）；主题二固定在最右端
+  let current = config.theme === 'v2' ? 1 : 0.5;
   let target = current;
   let lastIdx = -1; // 上一次生效的档位
   let booted = false;
@@ -265,7 +288,9 @@
   }
 
   function activeSetId() {
-    return theme === 'v2' ? 'v2' : DEFAULT_SET;
+    if (theme === 'v2') return 'v2';
+    if (theme === 'gemini') return 'gemini';
+    return DEFAULT_SET;
   }
 
   function activeSet() {
@@ -633,10 +658,11 @@
   const THEME_EYEBROW = {
     classic: 'WHALE‑GIRL RHEOSTAT',
     v2: 'WHALE‑GIRL CUP DIAL',
+    gemini: 'WHALE‑GIRL FIGURE DIAL',
     burst: 'WHALE‑GIRL IMPACT',
   };
 
-  // 主题切换：主题一/二 = 滑轨（各用一套素材），主题三 = 固定立绘 + 暴击展示
+  // 主题切换：主题一/二/三 = 滑轨（各用一套素材），主题四 = 固定立绘 + 暴击展示
   function applyTheme(next) {
     theme = isTheme(next) ? next : 'classic';
     config.theme = theme;
@@ -644,6 +670,7 @@
 
     document.body.classList.toggle('theme-classic', theme === 'classic');
     document.body.classList.toggle('theme-v2', theme === 'v2');
+    document.body.classList.toggle('theme-gemini', theme === 'gemini');
     document.body.classList.toggle('theme-burst', burst);
 
     if (els.eyebrow) els.eyebrow.textContent = THEME_EYEBROW[theme];
@@ -665,7 +692,7 @@
       current = 1;
       els.captionLevel.textContent = '暴击';
       els.captionName.textContent = '暴击展示';
-      els.captionDesc.textContent = '点「神临」推进一帧；按住 5 秒自动播连招，连击到 30 脱力。';
+      els.captionDesc.textContent = '点「神临」推进一帧；按住 2 秒自动播连招，连击到 30 脱力。';
       els.slider.setAttribute('aria-valuetext', '暴击展示');
       lastIdx = -1;
       render(current);
@@ -676,13 +703,15 @@
       return;
     }
 
-    // 滑轨主题：按当前素材集重建帧与刻度（主题一 5 档 / 主题二 6 档）
+    // 滑轨主题：按当前素材集重建帧与刻度（主题一 5 档 / 主题二 6 档 / 主题三 5 档）
+    // 神临立绘与动作帧只属于主题四，切走时必须摘掉类，否则会盖在滑轨帧上
+    els.frameStack.classList.remove('is-shenlin', 'is-action');
     buildFrames();
     buildGradeLabels();
     syncSettingsInputs();
 
-    // 主题一落回 v1 初始位置（50%），主题二停在最右端（G，即原图）
-    target = theme === 'classic' ? 0.5 : 1;
+    // 主题一与主题三落回 50%，主题二停在最右端（G，即原图）
+    target = theme === 'v2' ? 1 : 0.5;
     current = target;
     lastIdx = -1;
     setMode('cup');
@@ -814,12 +843,12 @@
        神临     当前身材的静止立绘；点一下进入当前动作的第 0 帧
        破壁     A–E 共用同一支「突破次元」图集，点一次自动放到末帧
 
-     点「神临」推进一帧，按住 5 秒自动播放连招；连击到 30 判定脱力，
+     点「神临」推进一帧，按住 2 秒自动播放连招；连击到 30 判定脱力，
      自动放完当前身材的摔倒序列后停住，再点一下回到神临立绘。
      ------------------------------------------------------------ */
 
   const BURST_EXHAUST_AT = 30;
-  const BURST_HOLD_DELAY = 5000; // 按住这么久才进入自动播放
+  const BURST_HOLD_DELAY = 2000; // 按住这么久才进入自动播放
   const BURST_HOLD_INTERVAL = 110;
   const BURST_BREAK_INTERVAL = 130;
 
@@ -1229,7 +1258,7 @@
     });
   }
 
-  /* --- 长按：按住「神临」5 秒后自动播放连招 --- */
+  /* --- 长按：按住「神临」2 秒后自动播放连招 --- */
 
   function startBurstHold(event) {
     if (theme !== 'burst') return;
@@ -1248,7 +1277,7 @@
     burst.suppressClick = false;
     els.burstTap.classList.add('is-arming');
 
-    // 5 秒到点才开始自动播放，中途松手等同于一次普通点击
+    // 2 秒到点才开始自动播放，中途松手等同于一次普通点击
     burst.holdTimer = setTimeout(() => {
       burst.holdTimer = null;
       if (theme !== 'burst' || burst.exhausted || burst.breakPlaying) return;
@@ -1718,7 +1747,7 @@
       if (impact.ready) playImpact(0.4);
     });
 
-    // 主题三：点「神临」或直接点立绘推进一帧；按住「神临」5 秒自动播放连招
+    // 主题三：点「神临」或直接点立绘推进一帧；按住「神临」2 秒自动播放连招
     els.burstTap.addEventListener('click', () => {
       // 长按松手后浏览器还会补一个 click，这里吃掉，避免多走一帧
       if (burst.suppressClick) {
@@ -1862,7 +1891,7 @@
       sound.setEnabled(config.sound);
       loadImpactSeries(config.impactSeries);
       applyTheme(config.theme);
-      target = config.theme === 'classic' ? 0.5 : 1;
+      target = config.theme === 'v2' ? 1 : 0.5;
       current = target;
       kick();
       syncSettingsInputs();

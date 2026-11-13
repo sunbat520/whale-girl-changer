@@ -35,7 +35,7 @@
           把 5 张图片放进 <code>assets/aligned/</code>，命名为<br>
           <code>a.jpeg · c.jpeg · d.jpeg · g.jpeg · h.jpeg</code>
         </p>
-        <!-- 主题三画面层：神临立绘 + sprite 动作图集 + 破壁，逐帧由点击推进 -->
+        <!-- 主题四画面层：神临立绘 + sprite 动作图集 + 破壁，逐帧由点击推进 -->
         <div class="burst-frame" id="burstFrame" aria-hidden="true"></div>
       </div>
 
@@ -86,18 +86,18 @@
         <button class="mode-tab" id="modeRush" role="tab" aria-selected="false" type="button">冲撞</button>
       </div>
 
-      <!-- 主题三：第一行动作，第二行身材（按钮由 app.js 按 BURST_BODIES / BURST_SETS 生成） -->
-      <div class="burst-modes" id="burstModes" role="group" aria-label="主题三动作" hidden>
+      <!-- 主题四：第一行动作，第二行身材（按钮由 app.js 按 BURST_BODIES / BURST_SETS 生成） -->
+      <div class="burst-modes" id="burstModes" role="group" aria-label="主题四动作" hidden>
         <div class="burst-row burst-row-actions" id="burstActions"></div>
         <div class="burst-row burst-row-bodies" id="burstBodies" role="group" aria-label="身材"></div>
       </div>
 
-      <!-- 主题三：上为神临（点击推进一帧，按住 5 秒自动播放连招），下为破壁（5 种身材共用的突破次元动画） -->
+      <!-- 主题四：上为神临（点击推进一帧，按住 2 秒自动播放连招），下为破壁（5 种身材共用的突破次元动画） -->
       <div class="burst-pad" id="burstPad" hidden>
         <button class="burst-btn burst-btn-tap" id="burstTap" type="button">
           <span class="burst-tap-main">神临</span>
           <span class="burst-tap-sub" id="burstTapSub">神临</span>
-          <span class="burst-tap-hint">（长按 5 秒自动播放）</span>
+          <span class="burst-tap-hint">（长按 2 秒自动播放）</span>
         </button>
         <button class="burst-btn burst-btn-break" id="burstBreak" type="button">
           <span class="burst-break-main">破壁</span>
@@ -154,7 +154,8 @@
           <select id="inputTheme" class="select">
             <option value="classic">主题一 · 经典滑轨（默认）</option>
             <option value="v2">主题二 · 鲸鱼娘 v2 六档</option>
-            <option value="burst">主题三 · 暴击展示</option>
+            <option value="gemini">主题三 · 五档身材 A–E</option>
+            <option value="burst">主题四 · 暴击展示</option>
           </select>
         </label>
       </fieldset>

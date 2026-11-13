@@ -28,6 +28,14 @@ html {
   touch-action: manipulation;
 }
 
+/* 按钮上的文字一律不可选中、不可长按复制：手机上长按「神临」是蓄力，
+   不能被系统的「选择 / 复制」菜单打断 */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -1171,7 +1179,7 @@ body.is-rush .impact-cracks {
 }
 
 /* ============================================================
-   主题切换（主题一 · 经典滑轨 / 主题二 · v2 六档 / 主题三 · 暴击展示）
+   主题切换（主题一 · 经典滑轨 / 主题二 · v2 六档 / 主题三 · 五档身材 / 主题四 · 暴击展示）
    ============================================================ */
 
 /* hidden 属性优先于组件自身的 display */
@@ -1179,7 +1187,7 @@ body.is-rush .impact-cracks {
   display: none !important;
 }
 
-/* 主题三：隐藏滑轨，只留暴击按钮与固定立绘 */
+/* 主题四：隐藏滑轨，只留暴击按钮与固定立绘 */
 body.theme-burst .meter,
 body.theme-burst .rail-wrap,
 body.theme-burst .grade-labels {
@@ -1196,12 +1204,12 @@ body.theme-burst .rheostat {
 
 body.theme-burst .display {
   cursor: pointer;
-  /* 主题三的立绘是抠过底的透明图，白卡会显得突兀；
+  /* 主题四的立绘是抠过底的透明图，白卡会显得突兀；
      深蓝渐变让角色从画面里浮出来，破壁满幅图也不留白边 */
   background: radial-gradient(120% 85% at 50% 12%, #14263c 0%, #0c1626 58%, #080f1a 100%);
 }
 
-/* 主题三：动作行 + 身材行 */
+/* 主题四：动作行 + 身材行 */
 .burst-modes {
   display: flex;
   flex-direction: column;
@@ -1309,7 +1317,7 @@ body.theme-burst .display {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-/* 主题三：「神临」推进一帧（长按自动连播），下方「破壁」播突破次元 */
+/* 主题四：「神临」推进一帧（长按自动连播），下方「破壁」播突破次元 */
 .burst-pad {
   display: flex;
   flex-direction: column;
@@ -1405,7 +1413,7 @@ body.theme-burst .display {
 }
 
 .burst-btn.is-arming .burst-tap-hint::after {
-  animation: burst-charge 5s linear forwards;
+  animation: burst-charge 2s linear forwards;
 }
 
 @keyframes burst-charge {
@@ -1493,7 +1501,7 @@ body.theme-burst .display {
     0 0 26px rgba(255, 140, 60, 0.5);
 }
 
-/* 主题三：动作帧。网格（4×2 / 4×4 / 3×3）与帧宽高比来自 sets.js，
+/* 主题四：动作帧。网格（4×2 / 4×4 / 3×3）与帧宽高比来自 sets.js，
    写进 --bw/--bh/--bx/--by/--ar。按高度铺满展示区，换帧只改 background-position */
 .burst-frame {
   position: absolute;
@@ -1512,12 +1520,14 @@ body.theme-burst .display {
   display: none;
 }
 
-.frame-stack.is-action .burst-frame {
+/* 这两层只服务主题四（原主题三）：必须挂 body.theme-burst，
+   否则主题一/二（以及新的主题三）会被神临立绘盖住 */
+body.theme-burst .frame-stack.is-action .burst-frame {
   display: block;
 }
 
-/* 主题三：神临立绘（当前身材的静止图）。窄长图用 contain，
-   高度只占 92%，上方留出呼吸空间，不裁头发和脚。 */
+/* 主题四：神临立绘（当前身材的静止图）。窄长图用 contain，
+   高度只占 96%，上方留出呼吸空间，不裁头发和脚。 */
 .frame-stack .burst-card-figure {
   position: absolute;
   left: 0;
@@ -1534,7 +1544,7 @@ body.theme-burst .display {
   -webkit-user-drag: none;
 }
 
-.frame-stack.is-shenlin .burst-card-figure {
+body.theme-burst .frame-stack.is-shenlin .burst-card-figure {
   display: block;
 }
 
@@ -1554,28 +1564,34 @@ body.theme-burst .display {
 /* ============================================================
    主题一（默认）：完整还原 v1「鲸鱼娘变化器」
    经典 5 档是三视图横图，展示区 6:5 且完整显示、不裁切
+   主题三沿用同一套滑轨布局（素材换成 A–E 立绘）
    ============================================================ */
 
-body.theme-classic .display-wrap {
+body.theme-classic .display-wrap,
+body.theme-gemini .display-wrap {
   width: min(560px, 74vw);
 }
 
-body.theme-classic .display {
+body.theme-classic .display,
+body.theme-gemini .display {
   aspect-ratio: 6 / 5;
 }
 
-body.theme-classic .frame-stack img {
+body.theme-classic .frame-stack img,
+body.theme-gemini .frame-stack img {
   object-fit: contain;
 }
 
 @media (max-width: 720px) {
-  body.theme-classic .display-wrap {
+  body.theme-classic .display-wrap,
+  body.theme-gemini .display-wrap {
     width: min(440px, 86vw);
   }
 }
 
 @media (max-height: 620px) and (orientation: landscape) {
-  body.theme-classic .display-wrap {
+  body.theme-classic .display-wrap,
+  body.theme-gemini .display-wrap {
     width: min(300px, 42vw);
   }
 }
