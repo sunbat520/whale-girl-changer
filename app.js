@@ -126,8 +126,8 @@
     burstCount: $('burstCount'),
     burstFrame: $('burstFrame'),
     burstModes: $('burstModes'),
-    burstModePose: $('burstModePose'),
-    burstModeAction: $('burstModeAction'),
+    burstActions: $('burstActions'),
+    burstVariants: $('burstVariants'),
     impact: $('impact'),
     impactFrame: $('impactFrame'),
     impactFlash: $('impactFlash'),
@@ -518,8 +518,9 @@
     const pos = t * (N - 1);
     const pct = t * 100;
     const burstOn = theme === 'burst';
-    // 主题二与冲撞模式都以贴玻璃立绘为主体；主题三切到动作帧时让位给 sprite 层
-    const figureOn = (burstOn && burst.mode !== 'action') || mode === 'rush';
+    // 主题二与冲撞模式都以贴玻璃立绘为主体；主题三只有姿态帧用立绘，其余让位给 sprite 层
+    const poseSet = burstOn && currentBurstSet();
+    const figureOn = (burstOn && poseSet && poseSet.kind === 'pose') || mode === 'rush';
 
     for (let i = 0; i < N; i++) {
       const img = frames[i];
@@ -785,19 +786,38 @@
   /* ------------------------------------------------------------
      主题三：暴击展示（点击驱动逐帧）
 
-     撞玻璃那套 GIF 的 9 帧是同一张立绘的 3×3 切块，不是动作序列，
-     所以这里给两套帧源做对照：
-       pose   —— 贴玻璃立绘 + 10 组姿态参数（贴脸/挤压/回弹/滑落）
-       action —— 跌倒动画的 16 帧真实动作序列（4×4 sprite 图集）
-     帧号只由点击推进，不点就停在当前帧，不做任何自动播放；
-     连击到 100 判定脱力，自动放完跌倒序列后停住，再点一下重新站起。
+     帧号只由点击推进，不点就停在当前帧，不做任何自动播放。
+     素材分两条线，由 assets/burst/sets.js 描述（tools/sync_actions.py 生成）：
+
+       动作（第一行）  撞玻璃 / 走路 / 挥手 / 蹦跳 / 坐下 / 摔倒 / 连招
+       版本（第二行）  只列当前动作真实存在的版本，只有一个就不显示
+
+       family v443    443×443 8 帧，透明，画质好
+       family v315    315×311 16 帧，需抠底，帧数多一倍
+       family impact  姿态帧（10 组 transform）/ 九宫格（3×3 切块扫描）
+
+     切换动作时优先留在同一 family，避免画风中途跳变；连招也只在同 family 内串联。
+     连击到 30 判定脱力，自动放完当前版本的摔倒序列后停住，再点一下重新站起。
      ------------------------------------------------------------ */
 
-  const BURST_EXHAUST_AT = 100;
-  const BURST_ACTION_COLS = 4;
-  const BURST_ACTION_TOTAL = 16;
-  const BURST_ACTION_SHEET = 'assets/impact/fall-16/sheet.webp';
+  const BURST_EXHAUST_AT = 30;
   const BURST_HUD_HIDE_MS = 4000;
+
+  // 资产表由 tools/sync_actions.py 生成为 window.BURST_SETS，这里只补语义文案
+  const BURST_SETS = Array.isArray(window.BURST_SETS) ? window.BURST_SETS : [];
+  const BURST_ACTION_ORDER = ['impact', 'walk', 'wave', 'jump', 'sit', 'fall', 'combo'];
+  const BURST_ACTION_LABELS = {
+    impact: '撞玻璃',
+    walk: '走路',
+    wave: '挥手',
+    jump: '蹦跳',
+    sit: '坐下',
+    fall: '摔倒',
+    combo: '连招',
+  };
+
+  // 连招顺序：走过来 → 挥手 → 跳一下 → 坐下 → 摔倒收尾
+  const BURST_COMBO_ORDER = ['walk', 'wave', 'jump', 'sit', 'fall'];
 
   // 10 帧撞击姿态：贴脸推近 → 压扁 → 回弹 → 下落 → 归位
   const BURST_POSES = [
@@ -815,15 +835,17 @@
 
   const BURST_TIERS = [
     { upTo: 9, label: '砰' },
-    { upTo: 49, label: '砰砰' },
-    { upTo: 99, label: '鲸涛' },
+    { upTo: 19, label: '砰砰' },
+    { upTo: 29, label: '鲸涛' },
     { upTo: Infinity, label: '脱力' },
   ];
 
   const burst = {
-    mode: 'pose', // pose = 姿态帧，action = 真实动作帧
+    setId: 'impact-pose', // BURST_SETS 里的 id，决定图集/帧数/网格
+    family: 'impact', // 当前画风家族，切动作时优先沿用
     count: 0, // 累计点击 = 连击数 = 帧计数
     exhausted: false,
+    exhaustPlaying: false, // 摔倒序列正在自动播放：此时点击无效，播完才允许复活
     autoTimer: null,
     hudTimer: null,
     btnTimer: null,
@@ -841,13 +863,49 @@
     els.burstBtn.classList.toggle('is-firing', firing);
   }
 
-  function burstFrameTotal() {
-    return burst.mode === 'action' ? BURST_ACTION_TOTAL : BURST_POSES.length;
+  function burstSetById(id) {
+    return BURST_SETS.find((s) => s.id === id) || BURST_SETS[0] || null;
+  }
+
+  function currentBurstSet() {
+    return burstSetById(burst.setId);
+  }
+
+  function currentBurstAction() {
+    const set = currentBurstSet();
+    return set ? set.action : 'impact';
+  }
+
+  // 只有一个版本的动作不显示第二行；正好让「撞玻璃」「走路」这类多版本动作暴露出来
+  function burstSetsForAction(action) {
+    return BURST_SETS.filter((s) => s.action === action);
+  }
+
+  // 切动作时优先留在同一 family，没有该 family 的版本才退回第一组
+  function preferredBurstSet(action, family) {
+    const pool = burstSetsForAction(action);
+    if (!pool.length) return null;
+    return pool.find((s) => s.family === family) || pool[0];
+  }
+
+  // 连招：同 family 五套动作按顺序串成一条长序列，缓存一次即可
+  const burstComboCache = new Map();
+  function comboSequence(family) {
+    if (burstComboCache.has(family)) return burstComboCache.get(family);
+    const seq = [];
+    for (const action of BURST_COMBO_ORDER) {
+      const set = BURST_SETS.find((s) => s.family === family && s.action === action);
+      if (!set) continue;
+      for (let i = 0; i < set.total; i++) seq.push({ set, index: i });
+    }
+    burstComboCache.set(family, seq);
+    return seq;
   }
 
   // 姿态帧：值直接写进 rush-figure 的 CSS 变量
   function paintPoseFrame(index) {
-    const pose = BURST_POSES[index % BURST_POSES.length];
+    const total = BURST_POSES.length;
+    const pose = BURST_POSES[((index % total) + total) % total];
     const fig = els.rushFigure;
     if (!fig || !pose) return;
     fig.style.setProperty('--f-scale', pose.s.toFixed(3));
@@ -857,28 +915,63 @@
     fig.style.setProperty('--f-y', pose.y + 'px');
   }
 
-  // 动作帧：只改 background-position，图集换帧零解码成本
-  function paintActionFrame(index) {
-    if (!els.burstFrame) return;
-    const i = ((index % BURST_ACTION_TOTAL) + BURST_ACTION_TOTAL) % BURST_ACTION_TOTAL;
-    const col = i % BURST_ACTION_COLS;
-    const row = Math.floor(i / BURST_ACTION_COLS);
-    els.burstFrame.style.setProperty('--c', col);
-    els.burstFrame.style.setProperty('--r', row);
+  // 动作帧：只换图集与 background-position，换帧零解码成本。
+  // 网格与帧数全部来自 sets.js，4×2 / 4×4 / 3×3 都能直接跑。
+  function paintSheetFrame(set, index) {
+    const af = els.burstFrame;
+    if (!af || !set || !set.sheet) return;
+    if (af.dataset.set !== set.id) {
+      af.dataset.set = set.id;
+      af.style.setProperty('--sheet', 'url("' + set.sheet + '")');
+      af.style.setProperty('--bw', set.cols * 100 + '%');
+      af.style.setProperty('--bh', set.rows * 100 + '%');
+      af.style.setProperty('--ar', String(set.ar || 1));
+    }
+    const total = set.total;
+    const i = ((index % total) + total) % total;
+    const col = i % set.cols;
+    const row = Math.floor(i / set.cols);
+    const bx = set.cols > 1 ? (col / (set.cols - 1)) * 100 : 0;
+    const by = set.rows > 1 ? (row / (set.rows - 1)) * 100 : 0;
+    af.style.setProperty('--bx', bx.toFixed(4) + '%');
+    af.style.setProperty('--by', by.toFixed(4) + '%');
   }
 
-  // 一次点击推进一帧：两套帧源共用同一个帧计数
-  function paintBurstFrame() {
-    const action = burst.mode === 'action';
-    els.frameStack.classList.toggle('is-action', action);
-    els.frameStack.classList.toggle('is-burst-pose', !action);
-    // 动作帧模式下让位给 sprite 层，否则贴玻璃立绘会盖住它
+  // 让 sprite 层接管画面：隐藏贴玻璃立绘
+  function showSheetLayer() {
+    els.frameStack.classList.add('is-action');
+    els.frameStack.classList.remove('is-burst-pose');
     if (els.rushFigure) {
-      els.rushFigure.style.opacity = action ? '0' : '1';
-      els.rushFigure.style.visibility = action ? 'hidden' : 'visible';
+      els.rushFigure.style.opacity = '0';
+      els.rushFigure.style.visibility = 'hidden';
     }
-    if (action) paintActionFrame(burst.count);
-    else paintPoseFrame(burst.count);
+  }
+
+  // 一次点击推进一帧
+  function paintBurstFrame() {
+    const set = currentBurstSet();
+    if (!set) return;
+
+    if (set.kind === 'pose') {
+      els.frameStack.classList.remove('is-action');
+      els.frameStack.classList.add('is-burst-pose');
+      if (els.rushFigure) {
+        els.rushFigure.style.opacity = '1';
+        els.rushFigure.style.visibility = 'visible';
+      }
+      paintPoseFrame(burst.count);
+      return;
+    }
+
+    showSheetLayer();
+    if (set.kind === 'combo') {
+      const seq = comboSequence(set.family);
+      if (!seq.length) return;
+      const item = seq[((burst.count % seq.length) + seq.length) % seq.length];
+      paintSheetFrame(item.set, item.index);
+      return;
+    }
+    paintSheetFrame(set, burst.count);
   }
 
   function bumpHud(combo, tier, exhausted) {
@@ -890,6 +983,8 @@
     restartClass(els.burstHud, 'is-pop');
 
     clearTimeout(burst.hudTimer);
+    // 脱力状态一直挂着提示，等复活时再收，不然刚显示就被 4 秒定时器抹掉
+    if (exhausted) return;
     burst.hudTimer = setTimeout(() => {
       if (els.burstHud.hidden) return;
       els.burstHud.classList.add('is-fade');
@@ -899,21 +994,28 @@
     }, BURST_HUD_HIDE_MS);
   }
 
-  // 脱力：自动放完跌倒 16 帧，停在最后一帧，等用户点一下重新站起
+  // 脱力：不管当前在哪个动作，都自动放完「同版本」的摔倒序列并停在最后一帧
   function startExhaust() {
     burst.exhausted = true;
+    burst.exhaustPlaying = true;
     clearTimeout(burst.autoTimer);
-    els.frameStack.classList.add('is-action');
+    const family = currentBurstSet() ? currentBurstSet().family : burst.family;
+    const fall =
+      BURST_SETS.find((s) => s.family === family && s.action === 'fall') ||
+      BURST_SETS.find((s) => s.action === 'fall');
+    if (!fall) return;
+    showSheetLayer();
 
     let i = 0;
     const step = () => {
       burst.count = i;
-      paintActionFrame(i);
+      paintSheetFrame(fall, i);
       i += 1;
-      if (i < BURST_ACTION_TOTAL) {
-        burst.autoTimer = setTimeout(step, 70);
+      if (i < fall.total) {
+        burst.autoTimer = setTimeout(step, 90);
       } else {
-        burst.count = BURST_ACTION_TOTAL - 1;
+        burst.count = fall.total - 1;
+        burst.exhaustPlaying = false;
       }
     };
     step();
@@ -925,11 +1027,12 @@
   // 脱力后点一下：重新站起来，从第 1 帧继续
   function reviveBurst() {
     burst.exhausted = false;
+    burst.exhaustPlaying = false;
     clearTimeout(burst.autoTimer);
     burst.autoTimer = null;
     burst.count = 0;
     paintBurstFrame();
-    bumpHud(0, burstTier(1), false);
+    clearTimeout(burst.hudTimer);
     els.burstHud.hidden = true;
     els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
     sound.click(420);
@@ -939,6 +1042,9 @@
   function hitBurst() {
     if (theme !== 'burst') return;
     if (burst.exhausted) {
+      // 摔倒序列还在自动播放时，点击先不响应：否则连点会一路点穿，
+      // 脱力动画刚起第一帧就被复活取消，等于看不到脱力。
+      if (burst.exhaustPlaying) return;
       reviveBurst();
       return;
     }
@@ -949,8 +1055,12 @@
     const tier = burstTier(burst.count);
     bumpHud(burst.count, tier, false);
 
-    const pose = BURST_POSES[burst.count % BURST_POSES.length];
-    sound.click(burst.mode === 'pose' ? pose.tone : 320 + Math.min(burst.count, 60) * 4);
+    const set = currentBurstSet();
+    const tone =
+      set && set.kind === 'pose'
+        ? BURST_POSES[burst.count % BURST_POSES.length].tone
+        : 320 + Math.min(burst.count, 60) * 4;
+    sound.click(tone);
     if (navigator.vibrate) navigator.vibrate(6);
 
     setBurstButton(true);
@@ -961,20 +1071,69 @@
     if (burst.count >= BURST_EXHAUST_AT) startExhaust();
   }
 
-  function setBurstMode(next) {
-    if (next !== 'pose' && next !== 'action') return;
-    burst.mode = next;
+  /* --- 两级选择器：动作行固定，版本行按当前动作重建 --- */
+
+  function buildBurstControls() {
+    if (!els.burstActions || !els.burstVariants) return;
+
+    const actions = BURST_ACTION_ORDER.filter((a) => burstSetsForAction(a).length);
+    els.burstActions.innerHTML = '';
+    for (const action of actions) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'burst-mode';
+      btn.dataset.action = action;
+      btn.textContent = BURST_ACTION_LABELS[action] || action;
+      els.burstActions.appendChild(btn);
+    }
+    syncBurstControls();
+  }
+
+  // 同步高亮：动作行按 action，版本行按 setId；版本只有一个时整行隐藏
+  function syncBurstControls() {
+    if (!els.burstActions || !els.burstVariants) return;
+    const action = currentBurstAction();
+
+    els.burstActions.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.action === action);
+    });
+
+    const pool = burstSetsForAction(action);
+    els.burstVariants.innerHTML = '';
+    if (pool.length < 2) {
+      els.burstVariants.hidden = true;
+      return;
+    }
+    els.burstVariants.hidden = false;
+    for (const set of pool) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'burst-mode is-variant';
+      btn.dataset.set = set.id;
+      btn.textContent = set.variant;
+      btn.classList.toggle('is-active', set.id === burst.setId);
+      els.burstVariants.appendChild(btn);
+    }
+  }
+
+  // 选中某一组：重置帧号并立刻给一帧，避免停在 baseline 上看不出差别
+  function selectBurstSet(set) {
+    if (!set) return;
+    burst.setId = set.id;
+    burst.family = set.family;
     burst.exhausted = false;
+    burst.exhaustPlaying = false;
     clearTimeout(burst.autoTimer);
     burst.autoTimer = null;
-    burst.count = 0;
-    els.burstModePose.classList.toggle('is-active', next === 'pose');
-    els.burstModeAction.classList.toggle('is-active', next === 'action');
-    paintBurstFrame();
-    // 切过去就先给一帧，避免停在 baseline 上看不出差别
     burst.count = 1;
+    syncBurstControls();
     paintBurstFrame();
     bumpHud(1, burstTier(1), false);
+  }
+
+  // 切动作：留在同 family 的版本上，没有就退回该动作的第一组
+  function setBurstAction(action) {
+    selectBurstSet(preferredBurstSet(action, burst.family));
   }
 
   // 离开主题三或重置：清掉连击、帧态与残留类
@@ -987,7 +1146,11 @@
     burst.btnTimer = null;
     burst.count = 0;
     burst.exhausted = false;
-    burst.mode = 'pose';
+    burst.exhaustPlaying = false;
+
+    const home = burstSetById('impact-pose');
+    burst.setId = home ? home.id : 'impact-pose';
+    burst.family = home ? home.family : 'impact';
 
     els.frameStack.classList.remove('is-action');
     els.frameStack.classList.remove('is-burst-pose');
@@ -1000,8 +1163,7 @@
         els.rushFigure.style.removeProperty(p);
       }
     }
-    if (els.burstModePose) els.burstModePose.classList.add('is-active');
-    if (els.burstModeAction) els.burstModeAction.classList.remove('is-active');
+    syncBurstControls();
     if (els.burstHud) {
       els.burstHud.hidden = true;
       els.burstHud.classList.remove('is-pop', 'is-break', 'is-fade');
@@ -1312,14 +1474,18 @@
       hitBurst();
     });
 
-    // 主题三：两套帧源对照
-    els.burstModePose.addEventListener('click', () => {
+    // 主题三：动作 / 版本切换（事件委托，新增动作不用再绑事件）
+    els.burstModes.addEventListener('click', (e) => {
+      const actionBtn = e.target.closest('[data-action]');
+      if (actionBtn) {
+        sound.ensure();
+        setBurstAction(actionBtn.dataset.action);
+        return;
+      }
+      const setBtn = e.target.closest('[data-set]');
+      if (!setBtn) return;
       sound.ensure();
-      setBurstMode('pose');
-    });
-    els.burstModeAction.addEventListener('click', () => {
-      sound.ensure();
-      setBurstMode('action');
+      selectBurstSet(burstSetById(setBtn.dataset.set));
     });
 
     els.inputTheme.addEventListener('change', () => {
@@ -1467,6 +1633,8 @@
     buildRushFigure();
     buildSwatches();
     buildImpactOptions();
+    // 两级选择器的按钮由 BURST_SETS 生成，必须在 applyTheme（内部会 resetBurst）之前建好
+    buildBurstControls();
     loadImpactSeries(config.impactSeries);
     applyTheme(config.theme);
     syncSoundButton();

@@ -93,10 +93,10 @@
         <button class="mode-tab" id="modeRush" role="tab" aria-selected="false" type="button">冲撞</button>
       </div>
 
-      <!-- 主题三：两套帧源对照演示，点击立绘推进一帧 -->
-      <div class="burst-modes" id="burstModes" role="group" aria-label="主题三帧源" hidden>
-        <button class="burst-mode is-active" id="burstModePose" type="button">① 撞击姿态帧 · 10</button>
-        <button class="burst-mode" id="burstModeAction" type="button">② 真实动作帧 · 16</button>
+      <!-- 主题三：第一行动作，第二行版本（按钮由 app.js 按 BURST_SETS 生成） -->
+      <div class="burst-modes" id="burstModes" role="group" aria-label="主题三动作" hidden>
+        <div class="burst-row" id="burstActions"></div>
+        <div class="burst-row burst-row-variant" id="burstVariants"></div>
       </div>
       <button class="burst-btn" id="burstBtn" type="button" hidden>暴击展示</button>
 
@@ -193,6 +193,7 @@
 
   <div class="scrim" id="scrim" hidden></div>
 
+  <script src="assets/burst/sets.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1196,16 +1196,32 @@ body.theme-burst .display {
   cursor: pointer;
 }
 
-/* 主题三：帧源对照（① 姿态帧 / ② 真实动作帧） */
+/* 主题三：两级选择器。第一行动作，第二行版本（只有当前动作有多个版本时才出现） */
 .burst-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.burst-modes[hidden] {
+  display: none;
+}
+
+.burst-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
 }
 
-.burst-modes[hidden] {
+.burst-row[hidden] {
   display: none;
+}
+
+/* 版本行是次要层级：更小、更淡，选中才亮起来 */
+.burst-row-variant {
+  gap: 6px;
 }
 
 .burst-mode {
@@ -1236,6 +1252,21 @@ body.theme-burst .display {
   color: #04101d;
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.burst-mode.is-variant {
+  padding: 6px 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.burst-mode.is-variant.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .burst-btn {
@@ -1365,18 +1396,20 @@ body.theme-burst .display {
   color: #ffe083;
 }
 
-/* 主题三：真实动作帧（16 帧 4×4 sprite 图集），换帧只改 background-position */
+/* 主题三：动作帧。网格（4×2 / 4×4 / 3×3）与帧宽高比来自 sets.js，
+   写进 --bw/--bh/--bx/--by/--ar。按高度铺满展示区，换帧只改 background-position */
 .burst-frame {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 100%;
-  aspect-ratio: 315 / 311;
+  height: 100%;
+  width: auto;
+  aspect-ratio: var(--ar, 1);
   transform: translate(-50%, -50%);
-  background-image: url("assets/impact/fall-16/sheet.webp");
+  background-image: var(--sheet, none);
   background-repeat: no-repeat;
-  background-size: 400% 400%;
-  background-position: calc(var(--c, 0) * 33.3333%) calc(var(--r, 0) * 33.3333%);
+  background-size: var(--bw, 400%) var(--bh, 200%);
+  background-position: var(--bx, 0%) var(--by, 0%);
   pointer-events: none;
   user-select: none;
   display: none;

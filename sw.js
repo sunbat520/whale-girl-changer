@@ -5,13 +5,14 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v10';
+const CACHE_NAME = 'whale-changer-v12';
 
 const PRECACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './assets/burst/sets.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -31,8 +32,9 @@ const PRECACHE = [
   './assets/g.jpeg',
   // 主题三：默认撞击立绘；其余九组按需缓存（见 cacheFirst）
   './assets/impact/new-burst/still.png',
-  // 主题三「真实动作帧」：16 帧跌倒序列的 sprite 图集
-  './assets/impact/fall-16/sheet.webp',
+  // 主题三动作图集（assets/burst/*.webp，共 11 张约 2.2MB）不预缓存：
+  // 默认停在姿态帧用不到它们，首次点选某个动作时由 cacheFirst 落盘，
+  // 否则手机首屏要多下 2MB 才出画面。
 ];
 
 self.addEventListener('install', (event) => {
