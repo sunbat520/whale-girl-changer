@@ -1196,9 +1196,12 @@ body.theme-burst .rheostat {
 
 body.theme-burst .display {
   cursor: pointer;
+  /* 主题三的立绘是抠过底的透明图，白卡会显得突兀；
+     深蓝渐变让角色从画面里浮出来，破壁满幅图也不留白边 */
+  background: radial-gradient(120% 85% at 50% 12%, #14263c 0%, #0c1626 58%, #080f1a 100%);
 }
 
-/* 主题三：动作行 + 人物卡行 */
+/* 主题三：动作行 + 身材行 */
 .burst-modes {
   display: flex;
   flex-direction: column;
@@ -1221,15 +1224,26 @@ body.theme-burst .display {
   display: none;
 }
 
-/* 人物卡行是次要层级：更小、更淡，选中才亮起来 */
-.burst-row-cards {
+/* 身材行是次要层级：更小、更淡，选中才亮起来 */
+.burst-row-bodies {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
+  width: 100%;
+  max-width: 440px;
 }
 
-/* 动作行固定 7 等分：标签都是两个字，平分比自然换行更整齐（避免最后一行只剩「连招」） */
+.burst-row-bodies .burst-mode {
+  padding: 7px 2px;
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 动作行固定 6 等分：标签都是两个字，平分比自然换行更整齐 */
 .burst-row-actions {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
   width: 100%;
   max-width: 440px;
@@ -1295,7 +1309,7 @@ body.theme-burst .display {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-/* 主题三：上「单击」推进一帧，下「长按」自动循环，两半拼成一组按钮 */
+/* 主题三：「神临」推进一帧（长按自动连播），下方「破壁」播突破次元 */
 .burst-pad {
   display: flex;
   flex-direction: column;
@@ -1351,21 +1365,56 @@ body.theme-burst .display {
   color: color-mix(in srgb, var(--accent) 72%, #ffffff);
 }
 
-.burst-hold-main {
+.burst-hold-main,
+.burst-break-main {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.82);
 }
 
-.burst-hold-sub {
+.burst-hold-sub,
+.burst-break-sub {
   font-size: 11px;
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* 长按那半暗一档：单击才是主操作 */
-.burst-btn-hold {
+/* 长按提示：5 秒很长，给一条走完才自动播放的进度条 */
+.burst-tap-hint {
+  position: relative;
+  padding-bottom: 3px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.burst-tap-hint::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.burst-btn.is-arming .burst-tap-hint {
+  color: color-mix(in srgb, var(--accent) 78%, #ffffff);
+}
+
+.burst-btn.is-arming .burst-tap-hint::after {
+  animation: burst-charge 5s linear forwards;
+}
+
+@keyframes burst-charge {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* 破壁那半暗一档：神临才是主操作 */
+.burst-btn-break {
   padding: 8px 20px;
   border-radius: 14px;
   border-color: rgba(255, 255, 255, 0.18);
@@ -1380,7 +1429,7 @@ body.theme-burst .display {
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
-.burst-btn-hold:hover {
+.burst-btn-break:hover {
   box-shadow: none;
   border-color: rgba(255, 255, 255, 0.3);
 }
@@ -1404,7 +1453,7 @@ body.theme-burst .display {
     0 0 30px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
-.burst-btn.is-holding .burst-hold-sub {
+.burst-btn.is-holding .burst-tap-hint {
   color: var(--accent);
 }
 
@@ -1425,7 +1474,7 @@ body.theme-burst .display {
   100% { transform: scale(1); }
 }
 
-/* 档位跳字：从人物身上移到「单击」按钮的副标题，不挡脸 */
+/* 档位跳字：从人物身上移到「神临」按钮的副标题，不挡脸 */
 .burst-tap-sub.is-pop {
   animation: burst-sub-pop 0.22s var(--ease);
 }
@@ -1467,19 +1516,15 @@ body.theme-burst .display {
   display: block;
 }
 
-/* 主题三：姿态帧，值由 JS 写进 CSS 变量，点一次换一组。
-   不做 transition：逐帧推进是离散跳变，加过渡反而糊成一团，
-   也会在后台标签页被节流时卡在中间帧。 */
-/* 主题三姿态帧（撞墙）：三套人物卡共用一套 transform，按高度完整显示不裁头脚。
-   contain 而不是 cover——人物卡是 0.567 的窄长图，cover 会切掉 16% 的上下边缘。
-   高度只占 92%：撞墙最大推到 1.116 时正好不切到头发和脚。 */
+/* 主题三：神临立绘（当前身材的静止图）。窄长图用 contain，
+   高度只占 92%，上方留出呼吸空间，不裁头发和脚。 */
 .frame-stack .burst-card-figure {
   position: absolute;
   left: 0;
   right: 0;
-  top: 4%;
+  top: 2%;
   width: 100%;
-  height: 92%;
+  height: 96%;
   object-fit: contain;
   object-position: 50% 50%;
   opacity: 1;
@@ -1487,17 +1532,17 @@ body.theme-burst .display {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
-  will-change: transform;
 }
 
-.frame-stack.is-burst-pose .burst-card-figure {
+.frame-stack.is-shenlin .burst-card-figure {
   display: block;
-  transform:
-    translate3d(var(--f-x, 0px), var(--f-y, 0px), 0)
-    rotate(var(--f-rot, 0deg))
-    scale(var(--f-scale, 1))
-    scaleY(var(--f-sy, 1));
-  transform-origin: 50% 66%;
+}
+
+/* 破壁是满幅方图（414×413）：按宽度铺满，剩下的高度留在上下，
+   两侧的碎玻璃和手不会被裁掉。 */
+.frame-stack .burst-frame.is-square {
+  height: auto;
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

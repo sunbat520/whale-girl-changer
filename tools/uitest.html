@@ -1,0 +1,175 @@
+<!doctype html>
+<html><meta charset="utf-8"><title>uitest</title>
+<!--
+  主题三回归脚本（无头 Chrome 跑，不参与线上资源）。
+
+    cd whale-girl-changer
+    python3 -m http.server 8765
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --disable-gpu --no-sandbox --window-size=520,1100 \
+      --virtual-time-budget=60000 --dump-dom http://127.0.0.1:8765/tools/uitest.html
+
+  结果写在 <title>（全 PASS 时 UITEST PASS），明细在 #out。
+  只查 DOM/CSS 变量，不比对像素，所以素材换图不会误报。
+-->
+<body style="margin:0">
+<iframe id="f" style="width:430px;height:932px;border:0" src="../index.html?uitest=1"></iframe>
+<pre id="out"></pre>
+<script>
+const log = [];
+const ok = (name, cond, extra) => log.push((cond ? 'PASS ' : 'FAIL ') + name + (extra ? ' :: ' + extra : ''));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pointer = (w, el, type) =>
+  el.dispatchEvent(new w.PointerEvent(type, { pointerId: 1, bubbles: true, isPrimary: true }));
+
+window.addEventListener('load', () => setTimeout(run, 1200));
+
+async function run() {
+  const f = document.getElementById('f');
+  const w = f.contentWindow;
+  const d = f.contentDocument;
+  const $ = (s) => d.querySelector(s);
+  const $$ = (s) => Array.from(d.querySelectorAll(s));
+  const stack = () => d.getElementById('frameStack');
+  const frame = () => d.getElementById('burstFrame');
+  const tap = () => d.getElementById('burstTap');
+  const tapSub = () => d.getElementById('burstTapSub');
+  const brk = () => d.getElementById('burstBreak');
+  const card = () => $('.burst-card-figure');
+  const sheetOf = () => frame().style.getPropertyValue('--sheet');
+  const sheetName = () => (sheetOf().match(/burst\/([\w-]+)\.webp/) || [])[1] || sheetOf();
+  const actions = () => $$('#burstActions [data-action]');
+  const bodies = () => $$('#burstBodies [data-body]');
+  const errors = [];
+
+  w.addEventListener('error', (e) => errors.push('error: ' + e.message));
+  const origError = w.console.error;
+  w.console.error = function () {
+    errors.push('console.error: ' + Array.from(arguments).join(' '));
+    origError.apply(w.console, arguments);
+  };
+
+  try {
+    const sel = d.getElementById('inputTheme');
+    sel.value = 'burst';
+    sel.dispatchEvent(new w.Event('change'));
+    await sleep(600);
+
+    ok('动作行 6 个', actions().length === 6, actions().map((b) => b.textContent).join('/'));
+    ok('身材行 5 个', bodies().length === 5, bodies().map((b) => b.textContent).join('/'));
+    ok('默认神临立绘', stack().classList.contains('is-shenlin') && card().getAttribute('src').includes('body-a.webp'));
+    ok('按钮文案', tap().querySelector('.burst-tap-main').textContent === '神临');
+    ok('长按提示', tap().textContent.includes('长按 5 秒自动播放'));
+    ok('破壁副标题', brk().querySelector('.burst-break-sub').textContent === '突破次元');
+    ok('默认动作高亮连招', $('#burstActions .is-active').dataset.action === 'combo');
+
+    // 换身材 → 立绘跟着换，仍在神临
+    bodies()[1].click();
+    await sleep(120);
+    ok('换身材 B 立绘', card().getAttribute('src').includes('body-b.webp'));
+    ok('换身材仍在神临', stack().classList.contains('is-shenlin'));
+
+    // 选动作 → 用当前身材的图集
+    actions()[0].click();
+    await sleep(200);
+    ok('B 走路图集', sheetName() === 'b-walk', sheetName());
+    ok('进入动作图层', stack().classList.contains('is-action'));
+
+    const pos0 = frame().style.getPropertyValue('--bx') + '/' + frame().style.getPropertyValue('--by');
+    tap().click();
+    await sleep(120);
+    const pos1 = frame().style.getPropertyValue('--bx') + '/' + frame().style.getPropertyValue('--by');
+    ok('点击推进一帧', pos0 !== pos1, pos0 + ' → ' + pos1);
+    ok('副标题带连击数', /×1/.test(tapSub().textContent), tapSub().textContent);
+
+    // 换身材 E：动作跟着换
+    bodies()[4].click();
+    await sleep(200);
+    ok('E 走路图集', sheetName() === 'e-walk', sheetName());
+    ok('E 立绘已换', card().getAttribute('src').includes('body-e.webp'));
+
+    actions()[1].click();
+    await sleep(200);
+    ok('E 挥手图集', sheetName() === 'e-wave', sheetName());
+
+    // 破壁：三支随机，放完停在末帧，副标题报难度
+    brk().click();
+    await sleep(1800);
+    const first = sheetName();
+    ok('破壁图集', /^break-[123]$/.test(first), first);
+    ok('破壁方图铺满', frame().classList.contains('is-square'));
+    ok('破壁副标题报难度', /破壁 · 难度 [123]/.test(tapSub().textContent), tapSub().textContent);
+    const brkPos = frame().style.getPropertyValue('--bx') + '/' + frame().style.getPropertyValue('--by');
+    await sleep(500);
+    ok('破壁停末帧', brkPos === frame().style.getPropertyValue('--bx') + '/' + frame().style.getPropertyValue('--by') && brkPos === '100.0000%/100.0000%', brkPos);
+
+    tap().click();
+    await sleep(150);
+    ok('破壁后点回神临', stack().classList.contains('is-shenlin'));
+
+    brk().click();
+    await sleep(1800);
+    const second = sheetName();
+    ok('破壁换了一支', /^break-[123]$/.test(second) && second !== first, first + ' → ' + second);
+
+    tap().click();
+    await sleep(150);
+
+    // 长按 5 秒：自动连播，越播越久也不脱力
+    pointer(w, tap(), 'pointerdown');
+    await sleep(1000);
+    ok('1 秒时还没开始自动播放', !tap().classList.contains('is-holding'));
+    ok('长按中显示蓄力', tap().classList.contains('is-arming'));
+    await sleep(4600);
+    ok('5 秒后进入自动播放', tap().classList.contains('is-holding'));
+    ok('长按切到连招', $('#burstActions .is-active').dataset.action === 'combo');
+    await sleep(700);
+    const c1 = tapSub().textContent;
+    await sleep(700);
+    const c2 = tapSub().textContent;
+    ok('连招在自动推进', c1 !== c2, c1 + ' → ' + c2);
+    // 再播 5 秒（约 45 帧，远超 30）也不该脱力
+    await sleep(5000);
+    ok('自动连播不脱力', !/脱力/.test(tapSub().textContent) && !/脱力/.test(d.getElementById('captionName').textContent), tapSub().textContent);
+    pointer(w, tap(), 'pointerup');
+    await sleep(400);
+    const c3 = tapSub().textContent;
+    await sleep(600);
+    ok('松手后停止', c3 === tapSub().textContent, c3);
+
+    // 单次连击：30 下触发脱力
+    tap().click(); // 吃掉长按松手补发的 click
+    await sleep(80);
+    actions()[0].click();
+    await sleep(150);
+    for (let i = 0; i < 30; i++) {
+      tap().click();
+      await sleep(30);
+    }
+    await sleep(1800);
+    ok('单次连击 30 触发脱力', /脱力/.test(tapSub().textContent), tapSub().textContent);
+    ok('脱力停在摔倒末帧', sheetName() === 'e-fall', sheetName());
+    tap().click();
+    await sleep(200);
+    ok('点一下复活回神临', stack().classList.contains('is-shenlin'), tapSub().textContent);
+
+    // 主题往返
+    sel.value = 'classic';
+    sel.dispatchEvent(new w.Event('change'));
+    await sleep(500);
+    ok('回主题一无报错', !d.body.classList.contains('theme-burst'));
+    sel.value = 'burst';
+    sel.dispatchEvent(new w.Event('change'));
+    await sleep(600);
+    ok('回主题三默认神临', stack().classList.contains('is-shenlin') && $('#burstBodies .is-active').dataset.body === 'a');
+    ok('无 JS 报错', errors.length === 0, errors.join(' | '));
+  } catch (err) {
+    log.push('EXCEPTION ' + err.message + '\n' + err.stack);
+  }
+
+  document.getElementById('out').textContent = log.join('\n');
+  const failed = log.filter((l) => !l.startsWith('PASS'));
+  document.title = failed.length ? 'UITEST FAIL: ' + failed.join(' ;; ') : 'UITEST PASS (' + log.length + ' checks)';
+}
+</script>
+</body></html>

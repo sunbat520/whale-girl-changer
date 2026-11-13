@@ -35,7 +35,7 @@
           把 5 张图片放进 <code>assets/aligned/</code>，命名为<br>
           <code>a.jpeg · c.jpeg · d.jpeg · g.jpeg · h.jpeg</code>
         </p>
-        <!-- 主题三动作帧：sprite 图集，逐帧由点击推进；人物卡层由 app.js 挂载 -->
+        <!-- 主题三画面层：神临立绘 + sprite 动作图集 + 破壁，逐帧由点击推进 -->
         <div class="burst-frame" id="burstFrame" aria-hidden="true"></div>
       </div>
 
@@ -86,21 +86,22 @@
         <button class="mode-tab" id="modeRush" role="tab" aria-selected="false" type="button">冲撞</button>
       </div>
 
-      <!-- 主题三：第一行动作，第二行人物卡（按钮由 app.js 按 BURST_SETS / BURST_CARDS 生成） -->
+      <!-- 主题三：第一行动作，第二行身材（按钮由 app.js 按 BURST_BODIES / BURST_SETS 生成） -->
       <div class="burst-modes" id="burstModes" role="group" aria-label="主题三动作" hidden>
         <div class="burst-row burst-row-actions" id="burstActions"></div>
-        <div class="burst-row burst-row-cards" id="burstCards" role="group" aria-label="人物卡"></div>
+        <div class="burst-row burst-row-bodies" id="burstBodies" role="group" aria-label="身材"></div>
       </div>
 
-      <!-- 主题三：上为单击（推进一帧，副标题显示档位），下为长按（自动循环） -->
+      <!-- 主题三：上为神临（点击推进一帧，按住 5 秒自动播放连招），下为破壁（5 种身材共用的突破次元动画） -->
       <div class="burst-pad" id="burstPad" hidden>
         <button class="burst-btn burst-btn-tap" id="burstTap" type="button">
-          <span class="burst-tap-main">单击</span>
-          <span class="burst-tap-sub" id="burstTapSub">砰</span>
+          <span class="burst-tap-main">神临</span>
+          <span class="burst-tap-sub" id="burstTapSub">神临</span>
+          <span class="burst-tap-hint">（长按 5 秒自动播放）</span>
         </button>
-        <button class="burst-btn burst-btn-hold" id="burstHold" type="button">
-          <span class="burst-hold-main">长按</span>
-          <span class="burst-hold-sub">按住自动循环</span>
+        <button class="burst-btn burst-btn-break" id="burstBreak" type="button">
+          <span class="burst-break-main">破壁</span>
+          <span class="burst-break-sub">突破次元</span>
         </button>
       </div>
 

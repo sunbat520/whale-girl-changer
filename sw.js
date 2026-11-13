@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v13';
+const CACHE_NAME = 'whale-changer-v14';
 
 const PRECACHE = [
   './',
@@ -30,13 +30,13 @@ const PRECACHE = [
   './assets/e.jpeg',
   './assets/f.jpeg',
   './assets/g.jpeg',
-  // 主题三：撞墙姿态帧的默认人物卡；另外两张按需缓存（cacheFirst）
-  './assets/burst/card-1.webp',
+  // 主题三：神临立绘的默认身材（A）；其余身材与动作图集按需缓存（cacheFirst）
+  './assets/burst/body-a.webp',
   // 冲撞模式的主体立绘（模式入口当前隐藏，但启动时会预载）
   './assets/impact/new-burst/still.png',
-  // 主题三动作图集（assets/burst/*.webp，共 5 张约 1MB）不预缓存：
-  // 默认停在姿态帧用不到它们，首次点选某个动作时由 cacheFirst 落盘，
-  // 否则手机首屏要多下 1MB 才出画面。
+  // 主题三动作图集（assets/burst/*.webp，25 张约 13MB）不预缓存：
+  // 神临态用不到它们，首次点选某个动作时由 cacheFirst 落盘，
+  // 否则手机首屏要多下十几 MB 才出画面。
 ];
 
 self.addEventListener('install', (event) => {
