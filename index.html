@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#06101f">
   <title>鲸鱼娘变化器</title>
 
@@ -23,20 +23,54 @@
 
   <main class="stage">
     <header class="masthead">
-      <p class="eyebrow">WHALE‑GIRL RHEOSTAT</p>
+      <p class="eyebrow" id="eyebrow">WHALE‑GIRL RHEOSTAT</p>
       <h1 class="title" id="title">鲸鱼娘变化器</h1>
       <p class="subtitle" id="subtitle">拖动滑片，调节今天的鲸系浓度</p>
     </header>
 
-    <section class="display" aria-label="鲸鱼娘形象">
+    <div class="display-wrap">
+      <section class="display" id="display" aria-label="鲸鱼娘形象">
       <div class="frame-stack" id="frameStack">
         <p class="empty-hint" id="emptyHint">
-          把 5 张图片放进 <code>assets/</code>，命名为<br>
+          把 5 张图片放进 <code>assets/aligned/</code>，命名为<br>
           <code>a.jpeg · c.jpeg · d.jpeg · g.jpeg · h.jpeg</code>
         </p>
+        <!-- 主题二：点击立绘触发的撞玻璃 GIF -->
+        <img class="burst-gif" id="burstGif" alt="" hidden>
       </div>
+
+      <!-- 撞玻璃层：滑片一动，她就贴到玻璃上撞一下 -->
+      <div class="impact" id="impact" aria-hidden="true">
+        <img class="impact-frame" id="impactFrame" alt="" draggable="false">
+        <div class="impact-glass" aria-hidden="true"></div>
+        <div class="impact-flash" id="impactFlash" aria-hidden="true"></div>
+        <svg class="impact-cracks" id="impactCracks" viewBox="0 0 200 200" aria-hidden="true" preserveAspectRatio="none">
+          <g class="crack-ring">
+            <path d="M100 100 L92 74 L99 52 L93 26"/>
+            <path d="M100 100 L124 86 L146 92 L178 76"/>
+            <path d="M100 100 L118 116 L132 142 L154 158"/>
+            <path d="M100 100 L82 114 L64 112 L38 130"/>
+            <path d="M100 100 L96 128 L104 152 L94 178"/>
+            <path d="M100 100 L74 88 L52 66 L26 52"/>
+            <path d="M99 52 L118 48 L132 28"/>
+            <path d="M132 142 L150 140 L172 152"/>
+            <path d="M64 112 L58 134 L42 148"/>
+          </g>
+          <g class="crack-web">
+            <path d="M92 74 L108 70 L99 52"/>
+            <path d="M124 86 L120 74 L132 28"/>
+            <path d="M118 116 L124 86"/>
+            <path d="M82 114 L74 88"/>
+            <path d="M96 128 L82 114"/>
+            <path d="M104 152 L118 158 L132 142"/>
+            <path d="M64 112 L70 100 L74 88"/>
+          </g>
+        </svg>
+      </div>
+
       <div class="display-glow" aria-hidden="true"></div>
-    </section>
+      </section>
+    </div>
 
     <div class="caption" aria-live="polite">
       <div class="caption-line">
@@ -47,10 +81,18 @@
     </div>
 
     <section class="rheostat" aria-label="鲸系浓度调节器">
+      <div class="mode-tabs" id="modeTabs" role="tablist" aria-label="模式" hidden>
+        <button class="mode-tab is-active" id="modeCup" role="tab" aria-selected="true" type="button">杯型</button>
+        <button class="mode-tab" id="modeRush" role="tab" aria-selected="false" type="button">冲撞</button>
+      </div>
+
+      <!-- 主题二：用暴击展示按钮替代杯型/冲撞切换 -->
+      <button class="burst-btn" id="burstBtn" type="button" hidden>暴击展示</button>
+
       <div class="meter">
         <span class="meter-value" id="meterValue">50</span>
         <span class="meter-unit">%</span>
-        <span class="meter-label">鲸度</span>
+        <span class="meter-label" id="meterLabel">鲸度</span>
       </div>
 
       <div class="rail-wrap">
@@ -89,6 +131,17 @@
     </div>
 
     <div class="settings-body">
+      <fieldset class="fieldset">
+        <legend>主题</legend>
+        <label class="field">
+          <span>展示主题</span>
+          <select id="inputTheme" class="select">
+            <option value="cup">主题一 · 经典滑轨（默认）</option>
+            <option value="burst">主题二 · 暴击展示</option>
+          </select>
+        </label>
+      </fieldset>
+
       <label class="field">
         <span>标题</span>
         <input type="text" id="inputTitle" maxlength="24">
@@ -99,9 +152,9 @@
         <input type="text" id="inputSubtitle" maxlength="40">
       </label>
 
-      <label class="field">
+      <label class="field" id="packField">
         <span>图片包</span>
-        <select id="inputPack">
+        <select id="inputPack" class="select">
           <option value="classic">经典 5 档（a/c/d/g/h）</option>
           <option value="v2">鲸鱼娘 v2 六档（B–G）</option>
         </select>
@@ -119,6 +172,15 @@
           <span>自定义</span>
           <input type="color" id="inputAccent" value="#4fc3f7">
         </label>
+      </fieldset>
+
+      <fieldset class="fieldset" id="impactField">
+        <legend>撞玻璃</legend>
+        <label class="field">
+          <span>撞击动画</span>
+          <select id="inputImpact" class="select"></select>
+        </label>
+        <button class="btn-ghost" id="impactPreview" type="button">试撞一下</button>
       </fieldset>
 
       <button class="btn-ghost" id="resetBtn" type="button">恢复默认</button>

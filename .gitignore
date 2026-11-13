@@ -2,8 +2,12 @@
 *.log
 node_modules/
 
-# 图片对齐用的虚拟环境与临时校验图（脚本本身要提交）
+# 图片处理用的虚拟环境与临时校验图（脚本本身要提交）
 .venv-img/
 __pycache__/
 tools/__pycache__/
-tools/*.png
+tools/preview/
+
+# 本地工具与指向知识库的软链（不进仓库）
+.serena/
+docs/specs

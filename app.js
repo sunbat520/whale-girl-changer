@@ -1,5 +1,7 @@
 /* ============================================================
    鲸鱼娘变化器 — 交互逻辑
+   主题一（默认）：v1 鲸系浓度滑轨（经典 5 档 / v2 六档图片包）
+   主题二：暴击展示（固定立绘 + 点击播放撞玻璃 GIF）
    纯原生实现：无依赖、无构建步骤。
    ============================================================ */
 
@@ -10,9 +12,9 @@
      配置
      ------------------------------------------------------------ */
 
-  const STORAGE_KEY = 'whale-changer:v1';
+  const STORAGE_KEY = 'whale-changer-v2:v1';
 
-  // 经典 5 档：已对齐的三视图立绘，脚底和头顶统一，仅 cup 不同。
+  // 主题一（默认）：v1「鲸鱼娘变化器」的两套图片包
   const CLASSIC_GRADES = [
     { name: '小鲸鱼', desc: '刚学会吐泡泡，连尾巴都还是软的。' },
     { name: '鲸鱼娘', desc: '今天的女仆装熨得很平整。' },
@@ -21,7 +23,6 @@
     { name: '鲸祖', desc: '鲸祖降临，潮汐为她让路。' },
   ];
 
-  // v2 六档：同一张立绘挤压出的 B–G（来自 whale-girl-changer-v2）。
   const V2_GRADES = [
     { name: 'B 微澜', desc: '风平浪静，只漾开一圈小小的涟漪。' },
     { name: 'C 轻潮', desc: '潮水轻轻漫过裙摆。' },
@@ -47,14 +48,14 @@
     },
     v2: {
       label: '鲸鱼娘 v2 六档（B–G）',
-      dir: 'assets/v2/',
+      dir: 'assets/',
       sources: [
-        'assets/v2/b.jpeg',
-        'assets/v2/c.jpeg',
-        'assets/v2/d.jpeg',
-        'assets/v2/e.jpeg',
-        'assets/v2/f.jpeg',
-        'assets/v2/g.jpeg',
+        'assets/b.jpeg',
+        'assets/c.jpeg',
+        'assets/d.jpeg',
+        'assets/e.jpeg',
+        'assets/f.jpeg',
+        'assets/g.jpeg',
       ],
       grades: V2_GRADES,
     },
@@ -67,8 +68,31 @@
     subtitle: '拖动滑片，调节今天的鲸系浓度',
     accent: '#4fc3f7',
     sound: true,
+    impactSeries: 'new-burst',
+    mode: 'cup',
+    theme: 'cup', // cup = 主题一（v1 鲸系浓度滑轨），burst = 主题二（暴击展示）
     pack: DEFAULT_PACK,
   };
+
+  /* 撞玻璃：来自「蓝发鲸鱼女仆 · 图片与 GIF 完整合集」的十组贴玻璃立绘原图。
+     每组一张 still.png（原九宫格动画的高清原图），由 tools/sync_impact.py 同步。 */
+
+  const IMPACT_SERIES = [
+    { id: 'new-burst', label: '新版 · 撞玻璃九连拍' },
+    { id: 'new-crack', label: '新版 · 撞玻璃九宫格' },
+    { id: 'new-grid', label: '新版 · 撞玻璃九格' },
+    { id: 'new-fall', label: '新版 · 撞窗后仰' },
+    { id: 'old-knock', label: '初版 · 玻璃碰撞' },
+    { id: 'old-kiss', label: '初版 · 玻璃轻吻' },
+    { id: 'old-bash', label: '初版 · 撞击玻璃' },
+    { id: 'old-combo', label: '初版 · 撞玻璃九连击' },
+    { id: 'old-face', label: '初版 · 玻璃贴脸' },
+    { id: 'old-rebound', label: '初版 · 撞玻璃反弹' },
+  ];
+
+  const hasImpactSeries = (id) => IMPACT_SERIES.some((s) => s.id === id);
+  const isMode = (v) => v === 'cup' || v === 'rush';
+  const isTheme = (v) => v === 'cup' || v === 'burst';
 
   const PRESET_COLORS = [
     '#4fc3f7', // 深海青
@@ -79,6 +103,7 @@
     '#34d399', // 海藻绿
   ];
 
+  let N = 0; // 当前图片包的帧数，切换图片包时更新
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
   /* ------------------------------------------------------------
@@ -88,14 +113,26 @@
   const $ = (id) => document.getElementById(id);
 
   const els = {
+    eyebrow: $('eyebrow'),
     title: $('title'),
     subtitle: $('subtitle'),
+    display: $('display'),
     frameStack: $('frameStack'),
     emptyHint: $('emptyHint'),
+    burstGif: $('burstGif'),
+    impact: $('impact'),
+    impactFrame: $('impactFrame'),
+    impactFlash: $('impactFlash'),
+    impactCracks: $('impactCracks'),
     captionLevel: $('captionLevel'),
     captionName: $('captionName'),
     captionDesc: $('captionDesc'),
     meterValue: $('meterValue'),
+    meterLabel: $('meterLabel'),
+    modeTabs: $('modeTabs'),
+    modeCup: $('modeCup'),
+    modeRush: $('modeRush'),
+    burstBtn: $('burstBtn'),
     track: $('track'),
     trackFill: $('trackFill'),
     trackGlow: $('trackGlow'),
@@ -105,6 +142,10 @@
     soundToggle: $('soundToggle'),
     soundIcon: $('soundIcon'),
     soundText: $('soundText'),
+    inputTheme: $('inputTheme'),
+    inputImpact: $('inputImpact'),
+    impactPreview: $('impactPreview'),
+    impactField: $('impactField'),
     settingsToggle: $('settingsToggle'),
     settings: $('settings'),
     settingsClose: $('settingsClose'),
@@ -112,6 +153,7 @@
     inputTitle: $('inputTitle'),
     inputSubtitle: $('inputSubtitle'),
     inputPack: $('inputPack'),
+    packField: $('packField'),
     gradeFields: $('gradeFields'),
     swatches: $('swatches'),
     inputAccent: $('inputAccent'),
@@ -123,10 +165,15 @@
      ------------------------------------------------------------ */
 
   let config = loadConfig();
-  let current = 0.5; // 当前显示位置 0..1
-  let target = 0.5; // 目标位置 0..1
+  // 主题一默认停在 50%（v1 的初始位置）；主题二固定在最右端
+  let current = config.theme === 'burst' ? 1 : 0.5;
+  let target = current;
   let lastIdx = -1; // 上一次生效的档位
   let booted = false;
+  let mode = config.mode; // cup = 杯型变化（v2 原行为），rush = 贴脸冲撞
+  let theme = config.theme; // cup = 主题一（经典杯型），burst = 主题二（暴击展示）
+  let lastRushStep = -1; // 冲撞模式上一次触发的撞击档
+  let rushFullHit = false; // 满力撞击去抖：一次推到底只触发一次
   let dragging = false;
   let rafId = null;
   let lastFrameTime = 0;
@@ -154,6 +201,9 @@
       subtitle: DEFAULTS.subtitle,
       accent: DEFAULTS.accent,
       sound: DEFAULTS.sound,
+      impactSeries: DEFAULTS.impactSeries,
+      mode: DEFAULTS.mode,
+      theme: DEFAULTS.theme,
       pack: DEFAULTS.pack,
       gradesByPack: makeDefaultGradesByPack(),
     };
@@ -174,6 +224,11 @@
         base.accent = saved.accent;
       }
       if (typeof saved.sound === 'boolean') base.sound = saved.sound;
+      if (isMode(saved.mode)) base.mode = saved.mode;
+      if (isTheme(saved.theme)) base.theme = saved.theme;
+      if (typeof saved.impactSeries === 'string' && hasImpactSeries(saved.impactSeries)) {
+        base.impactSeries = saved.impactSeries;
+      }
       if (typeof saved.pack === 'string' && PACKS[saved.pack]) base.pack = saved.pack;
 
       const applyGrades = (packId, list) => {
@@ -190,8 +245,8 @@
       if (saved.gradesByPack && typeof saved.gradesByPack === 'object') {
         PACK_IDS.forEach((id) => applyGrades(id, saved.gradesByPack[id]));
       }
-      // 旧版配置只有 5 条 grades，迁移为经典包文案
-      if (Array.isArray(saved.grades)) applyGrades('classic', saved.grades);
+      // 旧版配置只有 v2 的六档 grades，迁移到 v2 图片包
+      if (Array.isArray(saved.grades)) applyGrades('v2', saved.grades);
     } catch (err) {
       // localStorage 不可用时按默认配置运行
     }
@@ -249,6 +304,7 @@
       const buffer = this.ctx.createBuffer(1, sr * 2, sr);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = buffer;
 
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
@@ -302,6 +358,42 @@
       osc.start(t);
       osc.stop(t + 0.08);
     }
+
+    /* 撞玻璃：低频闷响 + 高频玻璃碎响，强度 0..1 */
+    impact(strength) {
+      if (!this.enabled || !this.ctx) return;
+      const s = Math.max(0, Math.min(1, strength));
+      const t = this.ctx.currentTime;
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(126, t);
+      osc.frequency.exponentialRampToValueAtTime(44, t + 0.2);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.15 + 0.2 * s, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.27);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.29);
+
+      if (!this.noiseBuffer) return;
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.noiseBuffer;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2300;
+      const ng = this.ctx.createGain();
+      ng.gain.setValueAtTime(0.0001, t + 0.012);
+      ng.gain.exponentialRampToValueAtTime(0.045 + 0.085 * s, t + 0.022);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.17);
+      noise.connect(hp);
+      hp.connect(ng);
+      ng.connect(this.ctx.destination);
+      noise.start(t + 0.008);
+      noise.stop(t + 0.2);
+    }
   }
 
   const sound = new SoundEngine();
@@ -342,18 +434,27 @@
       .map((src) => src.slice(src.lastIndexOf('/') + 1))
       .join(' · ');
     els.emptyHint.innerHTML =
-      '把 ' + pack.sources.length + ' 张图片放进 <code>' + pack.dir + '</code>，命名为<br>' +
-      '<code>' + names + '</code>';
+      '把 ' +
+      pack.sources.length +
+      ' 张图片放进 <code>' +
+      pack.dir +
+      '</code>，命名为<br><code>' +
+      names +
+      '</code>';
   }
 
   function buildFrames() {
-    // 只移除旧帧，保留空图提示节点
-    Array.prototype.forEach.call(els.frameStack.querySelectorAll('img'), (img) => img.remove());
+    // 只移除旧帧，保留空图提示、GIF 层与主题二的固定立绘
+    Array.prototype.forEach.call(
+      els.frameStack.querySelectorAll('img:not(.burst-gif):not(.rush-figure)'),
+      (img) => img.remove()
+    );
     frames.length = 0;
 
     updateEmptyHint();
 
     const sources = activePack().sources;
+    N = sources.length;
     let settled = 0;
 
     sources.forEach((src) => {
@@ -371,8 +472,8 @@
         if (settled < sources.length) return;
         const anyLoaded = frames.some((f) => f.naturalWidth > 0);
         els.emptyHint.style.display = anyLoaded ? 'none' : 'block';
-        // 切换图片包时首帧可能在 render 之前完成加载，补一次渲染避免空白
-        render(current, false);
+        // 图片解码完成后强制重绘一次，避免切换图片包时空白
+        render(current);
       };
 
       img.addEventListener('load', settle, { once: true });
@@ -399,17 +500,29 @@
      渲染
      ------------------------------------------------------------ */
 
-  function render(t, animate = true) {
-    const n = frames.length || activePack().sources.length || 1;
-    const pos = t * (n - 1);
+  function render(t) {
+    const pos = t * (N - 1);
     const pct = t * 100;
+    const burstOn = theme === 'burst';
+    // 主题二与冲撞模式都以贴玻璃立绘为主体，杯型六帧全部隐藏
+    const figureOn = burstOn || mode === 'rush';
 
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < N; i++) {
       const img = frames[i];
       if (!img) continue;
+      if (figureOn) {
+        img.style.opacity = '0';
+        img.style.visibility = 'hidden';
+        continue;
+      }
       const weight = Math.max(0, 1 - Math.abs(pos - i));
       img.style.opacity = weight.toFixed(3);
       img.style.visibility = weight > 0.002 ? 'visible' : 'hidden';
+    }
+
+    if (els.rushFigure) {
+      els.rushFigure.style.opacity = figureOn ? '1' : '0';
+      els.rushFigure.style.visibility = figureOn ? 'visible' : 'hidden';
     }
 
     els.slider.style.left = pct + '%';
@@ -423,10 +536,127 @@
     }
 
     const idx = Math.round(pos);
-    if (idx !== lastIdx) {
+    if (!burstOn && idx !== lastIdx) {
       lastIdx = idx;
-      updateGrade(idx, animate);
+      if (mode === 'cup') updateGrade(idx, true);
     }
+
+    if (!burstOn && mode === 'rush') renderRush(t);
+  }
+
+  /* 冲撞模式：往右推 = 贴脸越近 + 撞得越猛；往左回拉不撞 */
+  function renderRush(t) {
+    const idx = Math.round(t * (N - 1));
+    const pct = t * 100;
+
+    // 贴脸推近：立绘随位置放大冲向观众（CSS 以脚部为轴缩放）
+    els.display.style.setProperty('--rush-scale', (1 + 0.28 * t).toFixed(4));
+
+    const levelText = Math.round(pct) + '%';
+    if (els.captionLevel.textContent !== levelText) {
+      els.captionLevel.textContent = levelText;
+    }
+    els.slider.setAttribute('aria-valuetext', '冲撞力度 ' + Math.round(pct) + '%');
+
+    if (!booted) {
+      lastRushStep = idx;
+      return;
+    }
+
+    // 满力撞击：推到底触发一次最强撞击（去抖，回拉到 90% 以内才重新武装）
+    if (t >= 0.99) {
+      if (!rushFullHit) {
+        rushFullHit = true;
+        playImpact(1);
+      }
+      lastRushStep = idx;
+      return;
+    }
+    if (t < 0.9) rushFullHit = false;
+
+    // 跨过撞击档：只有往右才撞，力度取当前位置
+    if (idx > lastRushStep) {
+      lastRushStep = idx;
+      playImpact(clamp01(t));
+    } else if (idx < lastRushStep) {
+      lastRushStep = idx;
+    }
+  }
+
+  function setMode(next) {
+    mode = isMode(next) ? next : 'cup';
+    config.mode = mode;
+    const rush = mode === 'rush';
+
+    document.body.classList.toggle('is-rush', rush);
+    els.modeCup.classList.toggle('is-active', !rush);
+    els.modeCup.setAttribute('aria-selected', String(!rush));
+    els.modeRush.classList.toggle('is-active', rush);
+    els.modeRush.setAttribute('aria-selected', String(rush));
+
+    els.meterLabel.textContent = rush ? '撞力' : '鲸度';
+    els.slider.setAttribute('aria-label', rush ? '冲撞力度' : '杯型');
+
+    lastRushStep = Math.round(current * (N - 1));
+    // 已经停在最右端时进入冲撞模式，不立刻补一次满力撞击
+    rushFullHit = current >= 0.99;
+
+    if (rush) {
+      els.captionName.textContent = '冲撞力度';
+      els.captionDesc.textContent = '往右推，撞得一次比一次狠。';
+      els.slider.setAttribute('aria-valuetext', '冲撞力度 ' + Math.round(current * 100) + '%');
+    } else {
+      updateGrade(Math.max(0, lastIdx), false);
+    }
+
+    render(current);
+    saveConfig();
+  }
+
+  // 主题切换：主题一 = v1 鲸系浓度滑轨，主题二 = 固定立绘 + 暴击展示
+  function applyTheme(next) {
+    theme = isTheme(next) ? next : 'cup';
+    config.theme = theme;
+    const burst = theme === 'burst';
+
+    document.body.classList.toggle('theme-burst', burst);
+    document.body.classList.toggle('theme-cup', !burst);
+
+    if (els.eyebrow) {
+      els.eyebrow.textContent = burst ? 'WHALE‑GIRL CUP DIAL' : 'WHALE‑GIRL RHEOSTAT';
+    }
+    if (els.inputTheme) els.inputTheme.value = theme;
+
+    // 杯型/冲撞切换两套主题都不展示：主题一只有滑轨，主题二用暴击按钮
+    els.modeTabs.hidden = true;
+    els.burstBtn.hidden = !burst;
+    // 撞击动画设置只服务于已隐藏的冲撞模式，两套主题都收起
+    els.impactField.hidden = true;
+    // 图片包只对主题一有效
+    els.packField.hidden = burst;
+
+    stopBurst();
+
+    if (burst) {
+      // 主题二不滑动：固定停在原图位置，只展示贴玻璃立绘
+      mode = 'cup';
+      target = 1;
+      current = 1;
+      els.captionLevel.textContent = '暴击';
+      els.captionName.textContent = '暴击展示';
+      els.captionDesc.textContent = '点击立绘，撞一次玻璃。';
+      els.slider.setAttribute('aria-valuetext', '暴击展示');
+      lastIdx = -1;
+      render(current);
+      saveConfig();
+      return;
+    }
+
+    // 回到主题一：落回 v1 的初始位置（50%）
+    target = 0.5;
+    current = 0.5;
+    lastIdx = -1;
+    setMode('cup');
   }
 
   function updateGrade(idx, animate) {
@@ -446,6 +676,7 @@
       swapDesc(grade.desc);
       sound.click(720 + idx * 120);
       if (navigator.vibrate) navigator.vibrate(6);
+      // 主题一保持默认项目的行为：跨档只换档，不闪撞击层
     } else {
       els.captionDesc.textContent = grade.desc;
     }
@@ -460,12 +691,197 @@
     }, 130);
   }
 
+  /* ------------------------------------------------------------
+     撞玻璃
+     ------------------------------------------------------------ */
+
+  const impact = {
+    series: null,
+    src: '',
+    img: null,
+    ready: false,
+    timer: null,
+    playing: false,
+    queued: 0,
+  };
+
+  function impactSrc(seriesId) {
+    return 'assets/impact/' + seriesId + '/still.png';
+  }
+
+  // 冲撞模式的主体立绘：固定用默认系列，不理会设置里的撞击动画选择
+  const RUSH_FIGURE_SRC = 'assets/impact/new-burst/still.png';
+
+  // 主题二「暴击展示」：固定用默认系列的撞玻璃 GIF，单次播放 9 帧 × 180ms
+  const BURST_GIF_SRC = 'assets/impact/new-burst/anim.gif';
+  const BURST_GIF_MS = 1620;
+
+  function buildRushFigure() {
+    const img = document.createElement('img');
+    img.className = 'rush-figure';
+    img.src = RUSH_FIGURE_SRC;
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    img.style.opacity = '0';
+    img.style.visibility = 'hidden';
+    img.addEventListener('load', () => {
+      if (booted) render(current);
+    }, { once: true });
+    els.frameStack.appendChild(img);
+    els.rushFigure = img;
+  }
+
+  function loadImpactSeries(seriesId) {
+    const id = hasImpactSeries(seriesId) ? seriesId : DEFAULTS.impactSeries;
+    impact.series = id;
+    impact.ready = false;
+    impact.src = impactSrc(id);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = impact.src;
+      const done = () => {
+        impact.ready = true;
+        resolve();
+      };
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+      impact.img = img;
+    });
+  }
+
+  // 撞击层亮出贴玻璃立绘（背景虚化同图铺底）；冲撞模式强制用冲撞主体那张
+  function showImpactStill(src) {
+    const use = mode === 'rush' ? RUSH_FIGURE_SRC : (src || impact.src);
+    if (!impact.ready || !use) return;
+    if (els.impactFrame.getAttribute('src') !== use) {
+      els.impactFrame.src = use;
+    }
+    els.impact.style.setProperty('--impact-bg', 'url("' + use + '")');
+  }
+
+  /* ------------------------------------------------------------
+     主题二：暴击展示（固定立绘 + 点击播放撞玻璃 GIF）
+     ------------------------------------------------------------ */
+
+  let burstTimer = null;
+
+  // 播放中只做视觉高亮，不改文案、不禁用：按钮始终可点，点击即从头重播
+  function setBurstButton(firing) {
+    if (!els.burstBtn) return;
+    els.burstBtn.classList.toggle('is-firing', firing);
+  }
+
+  function playBurst() {
+    if (theme !== 'burst') return;
+    clearTimeout(burstTimer);
+    const gif = els.burstGif;
+    gif.hidden = false;
+    // 先清空再强制回流、再设置 src，让同一张 GIF 每次都从头播放
+    gif.removeAttribute('src');
+    void gif.offsetHeight;
+    gif.src = BURST_GIF_SRC;
+    burstTimer = setTimeout(stopBurst, BURST_GIF_MS);
+
+    // 按钮本身要有明确的触发反馈，而不是只靠展示区里的 GIF
+    setBurstButton(true);
+    restartClass(els.burstBtn, 'is-firing');
+    if (navigator.vibrate) navigator.vibrate([9, 28, 12]);
+  }
+
+  function stopBurst() {
+    clearTimeout(burstTimer);
+    burstTimer = null;
+    els.burstGif.hidden = true;
+    els.burstGif.removeAttribute('src');
+    setBurstButton(false);
+  }
+
+  function restartClass(el, cls) {
+    el.classList.remove(cls);
+    // 强制回流，让同一个动画能连续重播
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }
+
+  function strike(strength) {
+    const s = clamp01(strength);
+    // 白闪峰值、裂纹速度与粗细都从该变量读取；0.5 时与旧版视觉完全一致
+    els.display.style.setProperty('--hit-strength', s.toFixed(3));
+    els.display.style.setProperty('--shake', (4 + 11 * s).toFixed(1));
+    restartClass(els.display, 'is-hit');
+    restartClass(els.impactFlash, 'is-on');
+    restartClass(els.impactCracks, 'is-on');
+
+    sound.impact(0.35 + 0.65 * s);
+    if (navigator.vibrate) navigator.vibrate([10, 26, 14]);
+  }
+
+  // 撞击装饰类的统一收尾。减弱动效下 CSS 把这些动画置为 none，
+  // animationend 不会触发，必须显式移除，否则类会一直挂住。
+  function clearImpactDecor() {
+    els.display.classList.remove('is-hit');
+    els.impactFlash.classList.remove('is-on');
+    els.impactCracks.classList.remove('is-on');
+  }
+
+  function playImpact(strength) {
+    const s = clamp01(strength);
+    if (!impact.ready) return;
+
+    if (impact.playing) {
+      impact.queued = Math.min(1, impact.queued + 1);
+      return;
+    }
+
+    impact.playing = true;
+    impact.queued = 0;
+    els.display.classList.add('is-impacting');
+
+    showImpactStill();
+    strike(s);
+
+    // 撞得越狠，贴脸立绘停留越久；减弱动效下 CSS 不播逐帧/震屏，逻辑统一
+    clearTimeout(impact.timer);
+    impact.timer = setTimeout(() => {
+      clearImpactDecor();
+      finishImpact(s);
+    }, 240 + 140 * s);
+  }
+
+  function finishImpact(strength) {
+    impact.playing = false;
+
+    if (impact.queued > 0) {
+      impact.queued = 0;
+      playImpact(strength);
+      return;
+    }
+
+    els.display.classList.remove('is-impacting');
+  }
+
+  function buildImpactOptions() {
+    els.inputImpact.innerHTML = '';
+    IMPACT_SERIES.forEach((series) => {
+      const opt = document.createElement('option');
+      opt.value = series.id;
+      opt.textContent = series.label;
+      els.inputImpact.appendChild(opt);
+    });
+    els.inputImpact.value = config.impactSeries;
+  }
+
   function applyConfig() {
     document.title = config.title;
     els.title.textContent = config.title;
     els.subtitle.textContent = config.subtitle;
     document.documentElement.style.setProperty('--accent', config.accent);
     els.inputAccent.value = config.accent;
+    els.inputImpact.value = config.impactSeries;
+    els.inputTheme.value = config.theme;
 
     buildGradeLabels();
     updateGrade(Math.max(0, lastIdx), false);
@@ -499,7 +915,7 @@
   }
 
   function loop(now) {
-    const dt = Math.min(48, now - lastFrameTime) / 16.667;
+    const dt = Math.max(0, Math.min(48, now - lastFrameTime)) / 16.667;
     lastFrameTime = now;
 
     const diff = target - current;
@@ -553,6 +969,7 @@
   function onPointerUp(e) {
     if (!dragging) return;
     dragging = false;
+
     try {
       els.track.releasePointerCapture(e.pointerId);
     } catch (err) {
@@ -631,8 +1048,10 @@
   function syncSettingsInputs() {
     els.inputTitle.value = config.title;
     els.inputSubtitle.value = config.subtitle;
+    els.inputPack.value = PACKS[config.pack] ? config.pack : DEFAULT_PACK;
     els.inputAccent.value = config.accent;
-    els.inputPack.value = config.pack;
+    els.inputImpact.value = config.impactSeries;
+    els.inputTheme.value = config.theme;
 
     els.gradeFields.innerHTML = '';
     activeGrades().forEach((grade, i) => {
@@ -650,25 +1069,6 @@
     syncSwatchActive();
   }
 
-  function switchPack(pack) {
-    if (!PACKS[pack]) {
-      els.inputPack.value = config.pack;
-      return;
-    }
-    if (pack === config.pack) return;
-
-    config.pack = pack;
-    lastIdx = -1;
-    current = 0.5;
-    target = 0.5;
-
-    buildFrames();
-    buildGradeLabels();
-    render(current, false);
-    syncSettingsInputs();
-    saveConfig();
-  }
-
   /* ------------------------------------------------------------
      事件绑定
      ------------------------------------------------------------ */
@@ -681,12 +1081,75 @@
     els.slider.addEventListener('keydown', onKeyDown);
     els.track.addEventListener('wheel', onWheel, { passive: false });
 
+    els.modeCup.addEventListener('click', () => setMode('cup'));
+    els.modeRush.addEventListener('click', () => {
+      sound.ensure();
+      setMode('rush');
+      // 切入冲撞模式给一次轻撞反馈（与设置里切换撞击动画的行为一致）
+      if (impact.ready) playImpact(0.4);
+    });
+
+    // 主题二：暴击按钮或直接点击立绘都能触发 GIF
+    els.burstBtn.addEventListener('click', () => {
+      sound.ensure();
+      playBurst();
+    });
+    els.display.addEventListener('click', () => {
+      if (theme !== 'burst') return;
+      sound.ensure();
+      playBurst();
+    });
+
+    els.inputTheme.addEventListener('change', () => {
+      applyTheme(els.inputTheme.value);
+    });
+
+    els.inputPack.addEventListener('change', () => {
+      config.pack = PACKS[els.inputPack.value] ? els.inputPack.value : DEFAULT_PACK;
+      buildFrames();
+      buildGradeLabels();
+      target = 0.5;
+      current = 0.5;
+      lastIdx = -1;
+      render(current);
+      syncSettingsInputs();
+      saveConfig();
+    });
+
     els.soundToggle.addEventListener('click', () => {
       config.sound = !config.sound;
       sound.setEnabled(config.sound);
       if (config.sound) sound.ensure();
       syncSoundButton();
       saveConfig();
+    });
+
+    els.inputImpact.addEventListener('change', () => {
+      config.impactSeries = hasImpactSeries(els.inputImpact.value)
+        ? els.inputImpact.value
+        : DEFAULTS.impactSeries;
+      saveConfig();
+      loadImpactSeries(config.impactSeries).then(() => playImpact(0.9));
+    });
+
+    els.impactPreview.addEventListener('click', () => {
+      sound.ensure();
+      if (impact.ready) {
+        playImpact(0.9);
+      } else {
+        loadImpactSeries(config.impactSeries).then(() => playImpact(0.9));
+      }
+    });
+
+    // 撞击动画收尾后清掉类名，下一次撞击才能重新触发同一段动画
+    els.display.addEventListener('animationend', (e) => {
+      if (e.animationName === 'impact-shake') els.display.classList.remove('is-hit');
+    });
+    els.impactFlash.addEventListener('animationend', () => {
+      els.impactFlash.classList.remove('is-on');
+    });
+    els.impactCracks.addEventListener('animationend', () => {
+      els.impactCracks.classList.remove('is-on');
     });
 
     els.settingsToggle.addEventListener('click', openSettings);
@@ -717,10 +1180,6 @@
       saveConfig();
     });
 
-    els.inputPack.addEventListener('change', () => {
-      switchPack(els.inputPack.value);
-    });
-
     els.swatches.addEventListener('click', (e) => {
       const btn = e.target.closest('.swatch');
       if (!btn) return;
@@ -737,8 +1196,10 @@
       const grades = activeGrades();
       if (!grades[i]) return;
 
+      const packDefaults = PACKS[config.pack] ? PACKS[config.pack].grades : [];
       if (field === 'name') {
-        grades[i].name = input.value.trim() || PACKS[config.pack].grades[i].name;
+        const fallback = packDefaults[i] ? packDefaults[i].name : grades[i].name;
+        grades[i].name = input.value.trim() || fallback;
       } else if (field === 'desc') {
         grades[i].desc = input.value;
       }
@@ -749,11 +1210,13 @@
     els.resetBtn.addEventListener('click', () => {
       config = defaultConfig();
       sound.setEnabled(config.sound);
-      lastIdx = -1;
-      current = 0.5;
-      target = 0.5;
+      loadImpactSeries(config.impactSeries);
       buildFrames();
-      render(current, false);
+      buildGradeLabels();
+      applyTheme(config.theme);
+      target = config.theme === 'burst' ? 1 : 0.5;
+      current = target;
+      kick();
       syncSettingsInputs();
       syncSoundButton();
       applyConfig();
@@ -790,16 +1253,19 @@
 
     buildTicks();
     buildFrames();
+    buildRushFigure();
     buildSwatches();
     buildGradeLabels();
+    buildImpactOptions();
+    loadImpactSeries(config.impactSeries);
+    applyTheme(config.theme);
     syncSoundButton();
-    els.inputPack.value = config.pack;
 
     document.documentElement.style.setProperty('--accent', config.accent);
     els.title.textContent = config.title;
     els.subtitle.textContent = config.subtitle;
 
-    render(current, false);
+    render(current);
     bindEvents();
     registerServiceWorker();
 

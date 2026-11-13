@@ -5,7 +5,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'whale-changer-v5';
+const CACHE_NAME = 'whale-changer-v6';
 
 const PRECACHE = [
   './',
@@ -16,17 +16,22 @@ const PRECACHE = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  // 主题一：经典 5 档（默认）
   './assets/aligned/a.jpeg',
   './assets/aligned/c.jpeg',
   './assets/aligned/d.jpeg',
   './assets/aligned/g.jpeg',
   './assets/aligned/h.jpeg',
-  './assets/v2/b.jpeg',
-  './assets/v2/c.jpeg',
-  './assets/v2/d.jpeg',
-  './assets/v2/e.jpeg',
-  './assets/v2/f.jpeg',
-  './assets/v2/g.jpeg',
+  // 主题一：v2 六档图片包
+  './assets/b.jpeg',
+  './assets/c.jpeg',
+  './assets/d.jpeg',
+  './assets/e.jpeg',
+  './assets/f.jpeg',
+  './assets/g.jpeg',
+  // 主题二：默认撞击立绘与暴击 GIF；其余九组按需缓存（见 cacheFirst）
+  './assets/impact/new-burst/still.png',
+  './assets/impact/new-burst/anim.gif',
 ];
 
 self.addEventListener('install', (event) => {
